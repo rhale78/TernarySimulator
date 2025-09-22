@@ -1,0 +1,351 @@
+/* Global Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Courier New', monospace;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    line-height: 1.4;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 10px;
+}
+
+/* Header */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #2d2d2d;
+    padding: 15px 20px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+header h1 {
+    color: #4CAF50;
+    font-size: 24px;
+}
+
+.controls button {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    margin: 0 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background-color 0.3s;
+}
+
+.controls button:hover {
+    background-color: #45a049;
+}
+
+.controls button:disabled {
+    background-color: #666;
+    cursor: not-allowed;
+}
+
+/* Main Layout */
+.main-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.left-panel, .right-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* Sections */
+.editor-section, .memory-section, .cpu-section, .io-section {
+    background-color: #2d2d2d;
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+.editor-section h3, .memory-section h3, .cpu-section h3, .io-section h3 {
+    color: #4CAF50;
+    margin-bottom: 10px;
+    font-size: 18px;
+}
+
+/* Program Editor */
+#programEditor {
+    width: 100%;
+    height: 300px;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    resize: vertical;
+}
+
+.editor-controls {
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+}
+
+.editor-controls button {
+    background-color: #555;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.editor-controls button:hover {
+    background-color: #666;
+}
+
+/* Memory Display */
+.memory-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.memory-controls label {
+    color: #ccc;
+}
+
+.memory-controls input {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-family: 'Courier New', monospace;
+    width: 100px;
+}
+
+.memory-controls button {
+    background-color: #555;
+    color: white;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.memory-display {
+    background-color: #1a1a1a;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 10px;
+    height: 200px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+}
+
+.memory-row {
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+}
+
+.memory-address {
+    color: #4CAF50;
+    width: 100px;
+    margin-right: 10px;
+}
+
+.memory-value {
+    color: #e0e0e0;
+    font-weight: bold;
+}
+
+.memory-value.highlight {
+    background-color: #FFD700;
+    color: #000;
+    padding: 1px 3px;
+    border-radius: 2px;
+}
+
+/* Registers */
+.registers {
+    margin-bottom: 15px;
+}
+
+.registers h4 {
+    color: #4CAF50;
+    margin-bottom: 10px;
+}
+
+.register-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+}
+
+.register {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #1a1a1a;
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 1px solid #555;
+}
+
+.register label {
+    color: #ccc;
+    font-weight: bold;
+}
+
+.reg-value {
+    color: #4CAF50;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    background-color: #333;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+/* ALU Display */
+.alu-section h4 {
+    color: #4CAF50;
+    margin-bottom: 10px;
+}
+
+.alu-display {
+    background-color: #1a1a1a;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 10px;
+}
+
+.alu-display div {
+    margin-bottom: 5px;
+    color: #ccc;
+}
+
+.alu-display span {
+    color: #4CAF50;
+    font-weight: bold;
+}
+
+/* I/O Section */
+.console {
+    margin-bottom: 15px;
+}
+
+.console h4 {
+    color: #4CAF50;
+    margin-bottom: 10px;
+}
+
+.console-output {
+    background-color: #1a1a1a;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 10px;
+    height: 120px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+}
+
+.graphics h4 {
+    color: #4CAF50;
+    margin-bottom: 10px;
+}
+
+#graphicsDisplay {
+    background-color: #000;
+    border: 1px solid #555;
+    border-radius: 4px;
+    image-rendering: pixelated;
+    width: 100%;
+    max-width: 240px;
+    height: auto;
+}
+
+/* Debug Section */
+.debug-section {
+    background-color: #2d2d2d;
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+.debug-section h3 {
+    color: #4CAF50;
+    margin-bottom: 10px;
+    font-size: 18px;
+}
+
+.debug-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+}
+
+.debug-info div {
+    background-color: #1a1a1a;
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 1px solid #555;
+    color: #ccc;
+}
+
+.debug-info span {
+    color: #4CAF50;
+    font-weight: bold;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .main-layout {
+        grid-template-columns: 1fr;
+    }
+    
+    .debug-info {
+        grid-template-columns: 1fr;
+    }
+    
+    header {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+}
+
+/* Ternary digit highlighting */
+.trit-1 { color: #ff6b6b; } /* -1 in red */
+.trit-0 { color: #95a5a6; } /* 0 in gray */
+.trit-1 { color: #4ecdc4; } /* +1 in cyan */
+
+/* Animation for running state */
+.running {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
