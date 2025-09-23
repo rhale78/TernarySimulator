@@ -321,6 +321,13 @@ class MemoryMappedIO {
             read: () => new Tryte(0), // Always reads as 0
             write: (value) => this.handleConsoleOutput(value)
         });
+        
+        // Keyboard input buffer (10 addresses for keyboard I/O)
+        this.defineRegion(maxAddr - 20, maxAddr - 11, {
+            name: 'keyboard_input',
+            read: (addr) => this.handleKeyboardRead(addr),
+            write: (addr, value) => this.handleKeyboardWrite(addr, value)
+        });
 
         // Character graphics memory (legacy character mode)
         this.defineRegion(maxAddr - 100, maxAddr - 51, {
@@ -356,6 +363,10 @@ class MemoryMappedIO {
             read: (addr) => this.handleSystemRead(addr),
             write: (addr, value) => this.handleSystemWrite(addr, value)
         });
+        
+        // Initialize keyboard buffer
+        this.keyboardBuffer = [];
+        this.keyboardBufferIndex = 0;
     }
 
     defineRegion(startAddr, endAddr, handlers) {
@@ -477,6 +488,64 @@ class MemoryMappedIO {
             const maxAddr = this.memory.maxAddress;
             const dmaAddr = address.toDecimal() - (maxAddr - 6729);
             window.simulator.dmaController.handleMemoryWrite(dmaAddr, value);
+        }
+    }
+    
+    handleKeyboardRead(address) {
+        // Read from keyboard input buffer
+        const maxAddr = this.memory.maxAddress;
+        const keyboardAddr = address.toDecimal() - (maxAddr - 20);
+        
+        switch (keyboardAddr) {
+            case 0: // Keyboard status: 0 = no key, 1 = key available
+                return new Tryte(this.keyboardBuffer.length > 0 ? 1 : 0);
+                
+            case 1: // Read next character from buffer
+                if (this.keyboardBuffer.length > 0) {
+                    const char = this.keyboardBuffer.shift();
+                    return new Tryte(char);
+                }
+                return new Tryte(0);
+                
+            case 2: // Peek at next character without removing
+                if (this.keyboardBuffer.length > 0) {
+                    return new Tryte(this.keyboardBuffer[0]);
+                }
+                return new Tryte(0);
+                
+            case 3: // Buffer length
+                return new Tryte(Math.min(this.keyboardBuffer.length, 364));
+                
+            default:
+                return new Tryte(0);
+        }
+    }
+    
+    handleKeyboardWrite(address, value) {
+        // Write to keyboard control registers
+        const maxAddr = this.memory.maxAddress;
+        const keyboardAddr = address.toDecimal() - (maxAddr - 20);
+        
+        switch (keyboardAddr) {
+            case 0: // Clear keyboard buffer
+                if (value.toDecimal() === 1) {
+                    this.keyboardBuffer = [];
+                }
+                break;
+                
+            case 1: // Simulate key press (for testing)
+                const char = value.toDecimal();
+                if (char > 0 && char < 256) {
+                    this.addKeyToBuffer(char);
+                }
+                break;
+        }
+    }
+    
+    addKeyToBuffer(keyCode) {
+        // Add key to keyboard buffer (max 100 keys)
+        if (this.keyboardBuffer.length < 100) {
+            this.keyboardBuffer.push(keyCode);
         }
     }
 

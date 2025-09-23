@@ -650,6 +650,28 @@ class TernaryCPU {
             'ALOAD': { opcode: 85, execute: this.atomicLoad.bind(this) },        // Atomic load
             'ASTORE': { opcode: 86, execute: this.atomicStore.bind(this) },      // Atomic store
             
+            // String and I/O operations
+            'STRLEN': { opcode: 96, execute: this.stringLengthInst.bind(this) },     // String length
+            'STRCPY': { opcode: 97, execute: this.stringCopyInst.bind(this) },       // String copy
+            'STRCAT': { opcode: 98, execute: this.stringConcatenateInst.bind(this) }, // String concatenate
+            'STRCMP': { opcode: 99, execute: this.stringCompareInst.bind(this) },    // String compare
+            'PRINTS': { opcode: 100, execute: this.printStringInst.bind(this) },     // Print string
+            'INPUTS': { opcode: 101, execute: this.inputStringInst.bind(this) },     // Input string
+            'GETKEY': { opcode: 102, execute: this.getKeyInst.bind(this) },          // Get key
+            'PUTCHAR': { opcode: 103, execute: this.putCharacterInst.bind(this) },   // Put character
+            
+            // Graphics operations  
+            'SETPIX': { opcode: 104, execute: this.setPixelInst.bind(this) },        // Set pixel
+            'GETPIX': { opcode: 105, execute: this.getPixelInst.bind(this) },        // Get pixel
+            'DRAWLINE': { opcode: 106, execute: this.drawLineInst.bind(this) },      // Draw line
+            'DRAWRECT': { opcode: 107, execute: this.drawRectangleInst.bind(this) }, // Draw rectangle
+            'DRAWCIRC': { opcode: 108, execute: this.drawCircleInst.bind(this) },    // Draw circle
+            'CLRSCR': { opcode: 109, execute: this.clearScreenInst.bind(this) },     // Clear screen
+            'SETCURS': { opcode: 110, execute: this.setCursorInst.bind(this) },      // Set cursor
+            'GETCURS': { opcode: 111, execute: this.getCursorInst.bind(this) },      // Get cursor
+            'SETTXT': { opcode: 112, execute: this.setTextColorInst.bind(this) },    // Set text color
+            'SETBG': { opcode: 113, execute: this.setBackgroundColorInst.bind(this) }, // Set background color
+            
             'NOP': { opcode: 0,  execute: this.noOperation.bind(this) },         // No operation
             'HLT': { opcode: -13, execute: this.halt.bind(this) }                // Halt
         };
@@ -1945,8 +1967,8 @@ class TernaryCPU {
                 }
                 break;
                 
-            case 2: // Read character from console (not implemented yet)
-                this.registers.set('acc', new Tryte(0));
+            case 2: // Read character from console
+                this.handleKeyboardInput();
                 break;
                 
             case 3: // File open (using virtual disk)
@@ -1974,6 +1996,72 @@ class TernaryCPU {
                 
             case 9: // Get current time/cycle count
                 this.registers.set('acc', new Tryte(this.cycleCount % 364));
+                break;
+                
+            // String operations (syscalls 10-19)
+            case 10: // strlen - get string length
+                this.handleStrlen();
+                break;
+                
+            case 11: // strcpy - copy string
+                this.handleStrcpy();
+                break;
+                
+            case 12: // strcat - concatenate strings
+                this.handleStrcat();
+                break;
+                
+            case 13: // strcmp - compare strings
+                this.handleStrcmp();
+                break;
+                
+            case 14: // Print string to console
+                this.handlePrintString();
+                break;
+                
+            case 15: // Input string from keyboard
+                this.handleInputString();
+                break;
+                
+            // Graphics operations (syscalls 20-29)
+            case 20: // Set pixel color
+                this.handleSetPixel();
+                break;
+                
+            case 21: // Get pixel color
+                this.handleGetPixel();
+                break;
+                
+            case 22: // Draw line
+                this.handleDrawLine();
+                break;
+                
+            case 23: // Draw rectangle
+                this.handleDrawRectangle();
+                break;
+                
+            case 24: // Draw circle
+                this.handleDrawCircle();
+                break;
+                
+            case 25: // Clear screen with color
+                this.handleClearScreen();
+                break;
+                
+            case 26: // Set cursor position
+                this.handleSetCursor();
+                break;
+                
+            case 27: // Get cursor position
+                this.handleGetCursor();
+                break;
+                
+            case 28: // Set text color
+                this.handleSetTextColor();
+                break;
+                
+            case 29: // Set background color
+                this.handleSetBackgroundColor();
                 break;
                 
             default:
@@ -2923,6 +3011,560 @@ class TernaryCPU {
                 this.unlockMemory(operand);
             }
         }
+    }
+    
+    // =================== STRING SYSTEM CALL HANDLERS ===================
+    
+    /**
+     * Enhanced keyboard input with buffer
+     */
+    handleKeyboardInput() {
+        // Check memory-mapped keyboard buffer first
+        const maxAddr = this.memory.maxAddress;
+        const keyboardStatusAddr = new TernaryAddress(maxAddr - 20, 9);
+        const keyboardDataAddr = new TernaryAddress(maxAddr - 19, 9);
+        
+        // Read from keyboard status register
+        const status = this.memory.read(keyboardStatusAddr);
+        if (status.toDecimal() > 0) {
+            // Key available, read it
+            const key = this.memory.read(keyboardDataAddr);
+            this.registers.set('acc', key);
+        } else {
+            this.registers.set('acc', new Tryte(0)); // No key available
+        }
+    }
+    
+    /**
+     * strlen - Calculate string length
+     * Input: IX = string address
+     * Output: ACC = string length
+     */
+    handleStrlen() {
+        const strAddr = this.registers.get('ix').toDecimal();
+        let length = 0;
+        let currentAddr = strAddr;
+        
+        // Count characters until null terminator (0)
+        while (length < 1000) { // Safety limit
+            const char = this.memory.read(new TernaryAddress(currentAddr, 9));
+            if (char.toDecimal() === 0) break;
+            length++;
+            currentAddr++;
+        }
+        
+        this.registers.set('acc', new Tryte(length));
+    }
+    
+    /**
+     * strcpy - Copy string
+     * Input: IX = destination address, IX1 = source address
+     * Output: ACC = destination address
+     */
+    handleStrcpy() {
+        const destAddr = this.registers.get('ix').toDecimal();
+        const srcAddr = this.registers.get('ix1').toDecimal();
+        let i = 0;
+        
+        // Copy characters including null terminator
+        while (i < 1000) { // Safety limit
+            const char = this.memory.read(new TernaryAddress(srcAddr + i, 9));
+            this.memory.write(new TernaryAddress(destAddr + i, 9), char);
+            
+            if (char.toDecimal() === 0) break; // Stop at null terminator
+            i++;
+        }
+        
+        this.registers.set('acc', new Tryte(destAddr));
+    }
+    
+    /**
+     * strcat - Concatenate strings
+     * Input: IX = destination address, IX1 = source address
+     * Output: ACC = destination address
+     */
+    handleStrcat() {
+        const destAddr = this.registers.get('ix').toDecimal();
+        const srcAddr = this.registers.get('ix1').toDecimal();
+        
+        // Find end of destination string
+        let destEnd = destAddr;
+        while (destEnd < destAddr + 1000) {
+            const char = this.memory.read(new TernaryAddress(destEnd, 9));
+            if (char.toDecimal() === 0) break;
+            destEnd++;
+        }
+        
+        // Copy source to end of destination
+        let i = 0;
+        while (i < 1000) {
+            const char = this.memory.read(new TernaryAddress(srcAddr + i, 9));
+            this.memory.write(new TernaryAddress(destEnd + i, 9), char);
+            
+            if (char.toDecimal() === 0) break;
+            i++;
+        }
+        
+        this.registers.set('acc', new Tryte(destAddr));
+    }
+    
+    /**
+     * strcmp - Compare strings
+     * Input: IX = string1 address, IX1 = string2 address
+     * Output: ACC = comparison result (-1, 0, 1)
+     */
+    handleStrcmp() {
+        const str1Addr = this.registers.get('ix').toDecimal();
+        const str2Addr = this.registers.get('ix1').toDecimal();
+        let i = 0;
+        
+        while (i < 1000) {
+            const char1 = this.memory.read(new TernaryAddress(str1Addr + i, 9)).toDecimal();
+            const char2 = this.memory.read(new TernaryAddress(str2Addr + i, 9)).toDecimal();
+            
+            if (char1 < char2) {
+                this.registers.set('acc', new Tryte(-1));
+                return;
+            } else if (char1 > char2) {
+                this.registers.set('acc', new Tryte(1));
+                return;
+            }
+            
+            if (char1 === 0) break; // End of both strings
+            i++;
+        }
+        
+        this.registers.set('acc', new Tryte(0)); // Strings are equal
+    }
+    
+    /**
+     * Print string to console
+     * Input: IX = string address
+     */
+    handlePrintString() {
+        const strAddr = this.registers.get('ix').toDecimal();
+        let output = '';
+        
+        for (let i = 0; i < 1000; i++) {
+            const char = this.memory.read(new TernaryAddress(strAddr + i, 9));
+            const charVal = char.toDecimal();
+            
+            if (charVal === 0) break; // Null terminator
+            
+            if (charVal >= 32 && charVal <= 126) {
+                output += String.fromCharCode(charVal);
+            }
+        }
+        
+        if (typeof window !== 'undefined' && window.simulator) {
+            window.simulator.outputToConsole(output);
+        } else {
+            console.log(output);
+        }
+        
+        this.registers.set('acc', new Tryte(output.length));
+    }
+    
+    /**
+     * Input string from keyboard
+     * Input: IX = buffer address, IX1 = max length
+     * Output: ACC = actual length read
+     */
+    handleInputString() {
+        const bufferAddr = this.registers.get('ix').toDecimal();
+        const maxLen = this.registers.get('ix1').toDecimal();
+        
+        // For now, simulate input with a prompt
+        let inputStr = "Hello Ternary!";
+        if (typeof window !== 'undefined' && window.prompt) {
+            inputStr = window.prompt("Enter string:") || "";
+        }
+        
+        const actualLen = Math.min(inputStr.length, maxLen - 1);
+        
+        for (let i = 0; i < actualLen; i++) {
+            this.memory.write(new TernaryAddress(bufferAddr + i, 9), new Tryte(inputStr.charCodeAt(i)));
+        }
+        
+        // Add null terminator
+        this.memory.write(new TernaryAddress(bufferAddr + actualLen, 9), new Tryte(0));
+        
+        this.registers.set('acc', new Tryte(actualLen));
+    }
+    
+    // =================== GRAPHICS SYSTEM CALL HANDLERS ===================
+    
+    /**
+     * Set pixel color
+     * Input: IX = x coordinate, IX1 = y coordinate, IX2 = color (ternary RGB)
+     */
+    handleSetPixel() {
+        const x = this.registers.get('ix').toDecimal();
+        const y = this.registers.get('ix1').toDecimal();
+        const color = this.registers.get('ix2').toDecimal();
+        
+        // Convert color to ternary RGB trits
+        const colorTrits = new BalancedTernary(color).toTrits(3); // 3 trits for RGB
+        
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.ternaryGraphics) {
+            window.simulator.ternaryGraphics.setPixel(x, y, colorTrits);
+        }
+        
+        this.registers.set('acc', new Tryte(0)); // Success
+    }
+    
+    /**
+     * Get pixel color
+     * Input: IX = x coordinate, IX1 = y coordinate
+     * Output: ACC = color value
+     */
+    handleGetPixel() {
+        const x = this.registers.get('ix').toDecimal();
+        const y = this.registers.get('ix1').toDecimal();
+        
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.ternaryGraphics) {
+            const colorTrits = window.simulator.ternaryGraphics.getPixel(x, y);
+            if (colorTrits) {
+                const colorValue = new BalancedTernary(colorTrits).toDecimal();
+                this.registers.set('acc', new Tryte(colorValue));
+            } else {
+                this.registers.set('acc', new Tryte(0)); // Black/default
+            }
+        } else {
+            this.registers.set('acc', new Tryte(0));
+        }
+    }
+    
+    /**
+     * Draw line using Bresenham's algorithm
+     * Input: IX = x1, IX1 = y1, IX2 = x2, IX3 = y2, ACC = color
+     */
+    handleDrawLine() {
+        const x1 = this.registers.get('ix').toDecimal();
+        const y1 = this.registers.get('ix1').toDecimal();
+        const x2 = this.registers.get('ix2').toDecimal();
+        const y2 = this.registers.get('ix3').toDecimal();
+        const color = this.registers.get('acc').toDecimal();
+        
+        const colorTrits = new BalancedTernary(color).toTrits(3);
+        
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.ternaryGraphics) {
+            this.drawLineBresenham(x1, y1, x2, y2, colorTrits);
+        }
+        
+        this.registers.set('acc', new Tryte(0)); // Success
+    }
+    
+    /**
+     * Draw rectangle
+     * Input: IX = x, IX1 = y, IX2 = width, IX3 = height, ACC = color
+     */
+    handleDrawRectangle() {
+        const x = this.registers.get('ix').toDecimal();
+        const y = this.registers.get('ix1').toDecimal();
+        const width = this.registers.get('ix2').toDecimal();
+        const height = this.registers.get('ix3').toDecimal();
+        const color = this.registers.get('acc').toDecimal();
+        
+        const colorTrits = new BalancedTernary(color).toTrits(3);
+        
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.ternaryGraphics) {
+            // Draw rectangle outline
+            for (let i = 0; i < width; i++) {
+                window.simulator.ternaryGraphics.setPixel(x + i, y, colorTrits); // Top
+                window.simulator.ternaryGraphics.setPixel(x + i, y + height - 1, colorTrits); // Bottom
+            }
+            for (let i = 0; i < height; i++) {
+                window.simulator.ternaryGraphics.setPixel(x, y + i, colorTrits); // Left
+                window.simulator.ternaryGraphics.setPixel(x + width - 1, y + i, colorTrits); // Right
+            }
+        }
+        
+        this.registers.set('acc', new Tryte(0)); // Success
+    }
+    
+    /**
+     * Draw circle using midpoint circle algorithm
+     * Input: IX = center_x, IX1 = center_y, IX2 = radius, ACC = color
+     */
+    handleDrawCircle() {
+        const centerX = this.registers.get('ix').toDecimal();
+        const centerY = this.registers.get('ix1').toDecimal();
+        const radius = this.registers.get('ix2').toDecimal();
+        const color = this.registers.get('acc').toDecimal();
+        
+        const colorTrits = new BalancedTernary(color).toTrits(3);
+        
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.ternaryGraphics) {
+            this.drawCircleMidpoint(centerX, centerY, radius, colorTrits);
+        }
+        
+        this.registers.set('acc', new Tryte(0)); // Success
+    }
+    
+    /**
+     * Clear screen with color
+     * Input: ACC = color
+     */
+    handleClearScreen() {
+        const color = this.registers.get('acc').toDecimal();
+        const colorTrits = new BalancedTernary(color).toTrits(3);
+        
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.ternaryGraphics) {
+            for (let x = 0; x < 81; x++) {
+                for (let y = 0; y < 81; y++) {
+                    window.simulator.ternaryGraphics.setPixel(x, y, colorTrits);
+                }
+            }
+        }
+        
+        this.registers.set('acc', new Tryte(0)); // Success
+    }
+    
+    /**
+     * Set cursor position
+     * Input: IX = x, IX1 = y
+     */
+    handleSetCursor() {
+        const x = this.registers.get('ix').toDecimal();
+        const y = this.registers.get('ix1').toDecimal();
+        
+        if (!this.cursorState) {
+            this.cursorState = { x: 0, y: 0, textColor: [-1, -1, -1], bgColor: [1, 1, 1] };
+        }
+        
+        this.cursorState.x = x;
+        this.cursorState.y = y;
+        
+        this.registers.set('acc', new Tryte(0)); // Success
+    }
+    
+    /**
+     * Get cursor position
+     * Output: IX = x, IX1 = y
+     */
+    handleGetCursor() {
+        if (!this.cursorState) {
+            this.cursorState = { x: 0, y: 0, textColor: [-1, -1, -1], bgColor: [1, 1, 1] };
+        }
+        
+        this.registers.set('ix', new Tryte(this.cursorState.x));
+        this.registers.set('ix1', new Tryte(this.cursorState.y));
+        this.registers.set('acc', new Tryte(0)); // Success
+    }
+    
+    /**
+     * Set text color
+     * Input: ACC = color (ternary RGB)
+     */
+    handleSetTextColor() {
+        const color = this.registers.get('acc').toDecimal();
+        const colorTrits = new BalancedTernary(color).toTrits(3);
+        
+        if (!this.cursorState) {
+            this.cursorState = { x: 0, y: 0, textColor: [-1, -1, -1], bgColor: [1, 1, 1] };
+        }
+        
+        this.cursorState.textColor = colorTrits;
+        this.registers.set('acc', new Tryte(0)); // Success
+    }
+    
+    /**
+     * Set background color
+     * Input: ACC = color (ternary RGB)
+     */
+    handleSetBackgroundColor() {
+        const color = this.registers.get('acc').toDecimal();
+        const colorTrits = new BalancedTernary(color).toTrits(3);
+        
+        if (!this.cursorState) {
+            this.cursorState = { x: 0, y: 0, textColor: [-1, -1, -1], bgColor: [1, 1, 1] };
+        }
+        
+        this.cursorState.bgColor = colorTrits;
+        this.registers.set('acc', new Tryte(0)); // Success
+    }
+    
+    // =================== GRAPHICS HELPER METHODS ===================
+    
+    /**
+     * Bresenham's line drawing algorithm
+     */
+    drawLineBresenham(x1, y1, x2, y2, colorTrits) {
+        const dx = Math.abs(x2 - x1);
+        const dy = Math.abs(y2 - y1);
+        const sx = x1 < x2 ? 1 : -1;
+        const sy = y1 < y2 ? 1 : -1;
+        let err = dx - dy;
+        
+        let x = x1, y = y1;
+        
+        while (true) {
+            if (typeof window !== 'undefined' && window.simulator && window.simulator.ternaryGraphics) {
+                window.simulator.ternaryGraphics.setPixel(x, y, colorTrits);
+            }
+            
+            if (x === x2 && y === y2) break;
+            
+            const e2 = 2 * err;
+            if (e2 > -dy) {
+                err -= dy;
+                x += sx;
+            }
+            if (e2 < dx) {
+                err += dx;
+                y += sy;
+            }
+        }
+    }
+    
+    /**
+     * Midpoint circle drawing algorithm
+     */
+    drawCircleMidpoint(centerX, centerY, radius, colorTrits) {
+        let x = 0;
+        let y = radius;
+        let d = 1 - radius;
+        
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.ternaryGraphics) {
+            const graphics = window.simulator.ternaryGraphics;
+            
+            while (x <= y) {
+                // Draw 8 points of symmetry
+                graphics.setPixel(centerX + x, centerY + y, colorTrits);
+                graphics.setPixel(centerX - x, centerY + y, colorTrits);
+                graphics.setPixel(centerX + x, centerY - y, colorTrits);
+                graphics.setPixel(centerX - x, centerY - y, colorTrits);
+                graphics.setPixel(centerX + y, centerY + x, colorTrits);
+                graphics.setPixel(centerX - y, centerY + x, colorTrits);
+                graphics.setPixel(centerX + y, centerY - x, colorTrits);
+                graphics.setPixel(centerX - y, centerY - x, colorTrits);
+                
+                if (d < 0) {
+                    d += 2 * x + 3;
+                } else {
+                    d += 2 * (x - y) + 5;
+                    y--;
+                }
+                x++;
+            }
+        }
+    }
+    
+    // =================== STRING AND GRAPHICS INSTRUCTION HANDLERS ===================
+    
+    /**
+     * STRING INSTRUCTION IMPLEMENTATIONS - These call system calls
+     */
+    
+    stringLengthInst(operand) {
+        // Set up registers and call system call
+        this.registers.set('ix', new Tryte(operand)); // String address
+        this.handleSystemCall(10); // strlen syscall
+    }
+    
+    stringCopyInst(operand) {
+        // IX = destination, operand = source
+        this.registers.set('ix1', new Tryte(operand)); // Source address
+        this.handleSystemCall(11); // strcpy syscall
+    }
+    
+    stringConcatenateInst(operand) {
+        // IX = destination, operand = source
+        this.registers.set('ix1', new Tryte(operand)); // Source address
+        this.handleSystemCall(12); // strcat syscall
+    }
+    
+    stringCompareInst(operand) {
+        // IX = string1, operand = string2
+        this.registers.set('ix1', new Tryte(operand)); // String2 address
+        this.handleSystemCall(13); // strcmp syscall
+    }
+    
+    printStringInst(operand) {
+        // operand = string address
+        this.registers.set('ix', new Tryte(operand)); // String address
+        this.handleSystemCall(14); // print string syscall
+    }
+    
+    inputStringInst(operand) {
+        // IX = buffer address, operand = max length
+        this.registers.set('ix1', new Tryte(operand)); // Max length
+        this.handleSystemCall(15); // input string syscall
+    }
+    
+    getKeyInst(operand) {
+        // Simple keyboard read
+        this.handleSystemCall(2); // read character syscall
+    }
+    
+    putCharacterInst(operand) {
+        // operand = character to output
+        this.registers.set('ix', new Tryte(operand)); // Character
+        this.handleSystemCall(1); // write character syscall
+    }
+    
+    /**
+     * GRAPHICS INSTRUCTION IMPLEMENTATIONS - These call system calls
+     */
+    
+    setPixelInst(operand) {
+        // IX = x, IX1 = y, operand = color
+        this.registers.set('ix2', new Tryte(operand)); // Color
+        this.handleSystemCall(20); // set pixel syscall
+    }
+    
+    getPixelInst(operand) {
+        // IX = x, operand = y  
+        this.registers.set('ix1', new Tryte(operand)); // Y coordinate
+        this.handleSystemCall(21); // get pixel syscall
+    }
+    
+    drawLineInst(operand) {
+        // IX = x1, IX1 = y1, IX2 = x2, operand = y2, ACC = color
+        this.registers.set('ix3', new Tryte(operand)); // Y2 coordinate
+        this.handleSystemCall(22); // draw line syscall
+    }
+    
+    drawRectangleInst(operand) {
+        // IX = x, IX1 = y, IX2 = width, operand = height, ACC = color
+        this.registers.set('ix3', new Tryte(operand)); // Height
+        this.handleSystemCall(23); // draw rectangle syscall
+    }
+    
+    drawCircleInst(operand) {
+        // IX = center x, IX1 = center y, operand = radius, ACC = color
+        this.registers.set('ix2', new Tryte(operand)); // Radius
+        this.handleSystemCall(24); // draw circle syscall
+    }
+    
+    clearScreenInst(operand) {
+        // operand = color
+        this.registers.set('acc', new Tryte(operand)); // Color
+        this.handleSystemCall(25); // clear screen syscall
+    }
+    
+    setCursorInst(operand) {
+        // IX = x, operand = y
+        this.registers.set('ix1', new Tryte(operand)); // Y coordinate
+        this.handleSystemCall(26); // set cursor syscall
+    }
+    
+    getCursorInst(operand) {
+        // Get cursor position
+        this.handleSystemCall(27); // get cursor syscall
+    }
+    
+    setTextColorInst(operand) {
+        // operand = color
+        this.registers.set('acc', new Tryte(operand)); // Text color
+        this.handleSystemCall(28); // set text color syscall
+    }
+    
+    setBackgroundColorInst(operand) {
+        // operand = color
+        this.registers.set('acc', new Tryte(operand)); // Background color
+        this.handleSystemCall(29); // set background color syscall
     }
 }
 
