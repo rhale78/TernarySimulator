@@ -75,7 +75,16 @@ class TernaryAssembler {
             'SWI': 39,   // Software interrupt
             'MSK': 40,   // Mask interrupt
             'UMK': 41,   // Unmask interrupt
-            'SML': 42    // Set mask level
+            'SML': 42,   // Set mask level
+            
+            // Memory Management Unit operations
+            'MPG': 43,   // Enable/disable paging
+            'MPT': 44,   // Set protection level
+            'MAP': 45,   // Map virtual page
+            'UMP': 46,   // Unmap virtual page
+            'FLT': 47,   // Flush TLB
+            'LVA': 48,   // Load from virtual address
+            'SVA': 49    // Store to virtual address
         };
 
         // Register names

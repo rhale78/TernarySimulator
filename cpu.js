@@ -44,6 +44,12 @@ if (typeof module !== 'undefined' && module.exports) {
     global.TernaryFloat = fpuModule.TernaryFloat;
     global.BinaryFloat = fpuModule.BinaryFloat;
     global.FloatingPointUnit = fpuModule.FloatingPointUnit;
+    
+    const mmuModule = require('./mmu.js');
+    global.MemoryManagementUnit = mmuModule.MemoryManagementUnit;
+    global.MemorySegment = mmuModule.MemorySegment;
+    global.PageTableEntry = mmuModule.PageTableEntry;
+    global.ProtectionModes = mmuModule.ProtectionModes;
 }
 
 class TernaryALU {
@@ -402,6 +408,9 @@ class TernaryCPU {
         // Floating-Point Unit
         this.fpu = new FloatingPointUnit();
         
+        // Memory Management Unit  
+        this.mmu = new MemoryManagementUnit(memory);
+        
         // Interrupt system
         this.romChip = new ROMChip();
         this.interruptVectorTable = new InterruptVectorTable(memory);
@@ -516,6 +525,15 @@ class TernaryCPU {
             'MSK': { opcode: 40, execute: this.maskInterrupt.bind(this) },       // Mask interrupt
             'UMK': { opcode: 41, execute: this.unmaskInterrupt.bind(this) },     // Unmask interrupt
             'SML': { opcode: 42, execute: this.setMaskLevel.bind(this) },        // Set mask level
+            
+            // Memory Management Unit operations
+            'MPG': { opcode: 43, execute: this.enablePaging.bind(this) },        // Enable/disable paging
+            'MPT': { opcode: 44, execute: this.setProtectionLevel.bind(this) },  // Set protection level
+            'MAP': { opcode: 45, execute: this.mapPage.bind(this) },             // Map virtual page
+            'UMP': { opcode: 46, execute: this.unmapPage.bind(this) },           // Unmap virtual page
+            'FLT': { opcode: 47, execute: this.flushTLB.bind(this) },            // Flush TLB
+            'LVA': { opcode: 48, execute: this.loadVirtualAddress.bind(this) },  // Load from virtual address
+            'SVA': { opcode: 49, execute: this.storeVirtualAddress.bind(this) }, // Store to virtual address
             
             'NOP': { opcode: 0,  execute: this.noOperation.bind(this) },         // No operation
             'HLT': { opcode: -13, execute: this.halt.bind(this) }                // Halt
@@ -1515,6 +1533,66 @@ class TernaryCPU {
         this.interruptController.setMaskLevel(operand);
     }
 
+    // Memory Management Unit Operations
+    enablePaging(operand) {
+        // Enable/disable paging (0=disable, 1=enable)
+        this.mmu.setPagingEnabled(operand !== 0);
+    }
+
+    setProtectionLevel(operand) {
+        // Set current protection level (0=kernel, 1=supervisor, 2=user)
+        this.mmu.setProtectionLevel(operand);
+    }
+
+    mapPage(operand) {
+        // Map virtual page: IX = virtual page, IX1 = physical page, ACC = permissions
+        const virtualPage = this.registers.get('ix').toDecimal();
+        const physicalPage = this.registers.get('ix1').toDecimal();
+        const permBits = this.registers.get('acc').toDecimal();
+        
+        // Convert permission bits to string
+        let permissions = '';
+        if (permBits & 1) permissions += 'r';
+        if (permBits & 2) permissions += 'w'; 
+        if (permBits & 4) permissions += 'x';
+        
+        this.mmu.mapPage(virtualPage, physicalPage, permissions);
+    }
+
+    unmapPage(operand) {
+        // Unmap virtual page: operand = virtual page number
+        this.mmu.unmapPage(operand);
+    }
+
+    flushTLB(operand) {
+        // Flush Translation Lookaside Buffer
+        this.mmu.tlb.clear();
+    }
+
+    loadVirtualAddress(operand) {
+        // Load from virtual address to accumulator
+        try {
+            const virtualAddr = typeof operand === 'number' ? operand : this.registers.get('ix').toDecimal();
+            const value = this.mmu.readVirtual(virtualAddr);
+            this.registers.set('acc', value);
+        } catch (error) {
+            // MMU exception - trigger interrupt
+            this.interruptController.requestInterrupt(7); // Memory protection violation
+        }
+    }
+
+    storeVirtualAddress(operand) {
+        // Store accumulator to virtual address
+        try {
+            const virtualAddr = typeof operand === 'number' ? operand : this.registers.get('ix').toDecimal();
+            const value = this.registers.get('acc');
+            this.mmu.writeVirtual(virtualAddr, value);
+        } catch (error) {
+            // MMU exception - trigger interrupt
+            this.interruptController.requestInterrupt(7); // Memory protection violation
+        }
+    }
+
     // CPU execution control
     step() {
         if (this.halted) return false;
@@ -1706,6 +1784,9 @@ class TernaryCPU {
         // Reset FPU
         this.fpu.reset();
         
+        // Reset MMU
+        this.mmu.reset();
+        
         // Reset interrupt system
         this.interruptController.reset();
         this.interruptVectorTable.reset();
@@ -1769,6 +1850,11 @@ class TernaryCPU {
         // Add FPU status
         if (this.fpu) {
             baseState.fpuStatus = this.fpu.getState();
+        }
+        
+        // Add MMU status
+        if (this.mmu) {
+            baseState.mmuStatus = this.mmu.getState();
         }
         
         return baseState;
