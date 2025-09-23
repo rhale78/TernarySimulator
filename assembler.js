@@ -17,6 +17,8 @@ class TernaryAssembler {
         this.labels = new Map();
         this.references = new Map();
         this.constants = new Map();
+        this.macros = new Map();
+        this.conditionalStack = [];
         this.currentAddress = 0;
         
         // Instruction opcodes (optimized for 3-trit range -13 to +13)
@@ -87,6 +89,8 @@ class TernaryAssembler {
         this.labels.clear();
         this.references.clear();
         this.constants.clear();
+        this.macros.clear();
+        this.conditionalStack = [];
         this.currentAddress = 0;
     }
 
@@ -113,7 +117,207 @@ class TernaryAssembler {
             });
         }
 
-        return processed;
+        // Expand macros and handle conditional assembly
+        return this.expandMacrosAndConditionals(processed);
+    }
+
+    expandMacrosAndConditionals(lines) {
+        // Pre-scan for .equ directives to make constants available for conditional evaluation
+        this.preScanConstants(lines);
+        
+        const expanded = [];
+        const conditionalStack = [];
+        let skipUntilEndif = false;
+        let currentMacro = null;
+
+        for (let lineInfo of lines) {
+            const line = lineInfo.text;
+            
+            // Handle macro definition
+            if (line.startsWith('.macro')) {
+                currentMacro = this.startMacroDefinition(line);
+                continue;
+            }
+            
+            if (line === '.endm') {
+                if (currentMacro) {
+                    this.endMacroDefinition(currentMacro);
+                    currentMacro = null;
+                }
+                continue;
+            }
+            
+            // If we're in a macro definition, collect lines
+            if (currentMacro) {
+                currentMacro.body.push(lineInfo);
+                continue;
+            }
+            
+            // Handle conditional assembly
+            if (line.startsWith('.ifdef') || line.startsWith('.ifndef') || line.startsWith('.if')) {
+                const shouldInclude = this.evaluateConditional(line);
+                conditionalStack.push({ shouldInclude, hasElse: false });
+                skipUntilEndif = !shouldInclude;
+                continue;
+            }
+            
+            if (line === '.else') {
+                if (conditionalStack.length > 0) {
+                    const current = conditionalStack[conditionalStack.length - 1];
+                    current.hasElse = true;
+                    skipUntilEndif = current.shouldInclude; // Flip the condition
+                }
+                continue;
+            }
+            
+            if (line === '.endif') {
+                if (conditionalStack.length > 0) {
+                    conditionalStack.pop();
+                    skipUntilEndif = conditionalStack.some(cond => !cond.shouldInclude);
+                }
+                continue;
+            }
+            
+            // Skip lines if we're in a false conditional
+            if (skipUntilEndif) continue;
+            
+            // Handle macro invocation
+            const parts = line.trim().split(/\s+/);
+            if (this.macros.has(parts[0])) {
+                const expandedLines = this.expandMacro(parts[0], parts.slice(1), lineInfo.number);
+                expanded.push(...expandedLines);
+                continue;
+            }
+            
+            // Regular line
+            expanded.push(lineInfo);
+        }
+
+        return expanded;
+    }
+
+    preScanConstants(lines) {
+        // Scan for .equ directives to populate constants for conditional evaluation
+        for (let lineInfo of lines) {
+            const line = lineInfo.text;
+            if (line.startsWith('.equ')) {
+                const parts = line.trim().split(/\s+/);
+                if (parts.length >= 3) {
+                    this.constants.set(parts[1], this.parseValue(parts[2]));
+                }
+            }
+        }
+    }
+
+    startMacroDefinition(line) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length < 2) throw new Error('.macro requires a name');
+        
+        const name = parts[1];
+        const parameters = parts.slice(2);
+        
+        return {
+            name: name,
+            parameters: parameters,
+            body: []
+        };
+    }
+
+    endMacroDefinition(macroDef) {
+        this.macros.set(macroDef.name, {
+            parameters: macroDef.parameters,
+            body: macroDef.body
+        });
+    }
+
+    expandMacro(name, args, lineNumber) {
+        const macro = this.macros.get(name);
+        const expanded = [];
+        
+        for (let lineInfo of macro.body) {
+            let line = lineInfo.text;
+            
+            // Replace parameters with arguments
+            for (let i = 0; i < macro.parameters.length; i++) {
+                const param = macro.parameters[i];
+                const arg = args[i] || '';
+                line = line.replace(new RegExp(`\\b${param}\\b`, 'g'), arg);
+            }
+            
+            expanded.push({
+                number: lineNumber,
+                original: `; macro ${name}: ${lineInfo.original}`,
+                text: line
+            });
+        }
+        
+        return expanded;
+    }
+
+    evaluateConditional(line) {
+        const parts = line.trim().split(/\s+/);
+        const directive = parts[0];
+        
+        switch (directive) {
+            case '.ifdef':
+                if (parts.length < 2) throw new Error('.ifdef requires a symbol name');
+                return this.constants.has(parts[1]) || this.labels.has(parts[1]);
+                
+            case '.ifndef':
+                if (parts.length < 2) throw new Error('.ifndef requires a symbol name');
+                return !this.constants.has(parts[1]) && !this.labels.has(parts[1]);
+                
+            case '.if':
+                if (parts.length < 2) throw new Error('.if requires an expression');
+                // Simple expression evaluation - can be enhanced
+                const expr = parts.slice(1).join(' ');
+                return this.evaluateSimpleExpression(expr);
+        }
+        
+        return false;
+    }
+
+    evaluateSimpleExpression(expr) {
+        // Simple expression evaluator for constants
+        // Supports: number comparisons, defined() function
+        
+        if (expr.match(/^defined\(\s*(\w+)\s*\)$/)) {
+            const symbol = expr.match(/^defined\(\s*(\w+)\s*\)$/)[1];
+            return this.constants.has(symbol) || this.labels.has(symbol);
+        }
+        
+        // Simple numeric comparison
+        const match = expr.match(/^(\w+|\d+)\s*([><=!]+)\s*(\w+|\d+)$/);
+        if (match) {
+            const [, left, op, right] = match;
+            const leftVal = this.getValue(left);
+            const rightVal = this.getValue(right);
+            
+            switch (op) {
+                case '>': return leftVal > rightVal;
+                case '<': return leftVal < rightVal;
+                case '>=': return leftVal >= rightVal;
+                case '<=': return leftVal <= rightVal;
+                case '==': return leftVal == rightVal;
+                case '!=': return leftVal != rightVal;
+            }
+        }
+        
+        // Default to true for simple symbols
+        const value = this.getValue(expr);
+        return value !== 0;
+    }
+
+    getValue(token) {
+        if (token.match(/^-?\d+$/)) {
+            return parseInt(token);
+        }
+        
+        if (this.constants.has(token)) {
+            return this.constants.get(token);
+        }
+        
+        return 0; // Undefined symbols default to 0
     }
 
     firstPass(lines) {
@@ -243,6 +447,39 @@ class TernaryAssembler {
                 if (parts.length < 2) throw new Error('.ds requires a count');
                 this.currentAddress += this.parseValue(parts[1]);
                 break;
+            
+            case '.align':
+                // Align to boundary
+                if (parts.length < 2) throw new Error('.align requires a boundary value');
+                const boundary = this.parseValue(parts[1]);
+                const remainder = this.currentAddress % boundary;
+                if (remainder !== 0) {
+                    this.currentAddress += boundary - remainder;
+                }
+                break;
+                
+            case '.rept':
+                // Repeat directive - should be handled in preprocessing
+                throw new Error('.rept directive should be preprocessed');
+                
+            case '.endr':
+                // End repeat directive
+                throw new Error('.endr directive should be preprocessed');
+                
+            // Conditional assembly directives are handled in preprocessing
+            case '.ifdef':
+            case '.ifndef':
+            case '.if':
+            case '.else':
+            case '.endif':
+                // These are handled in preprocessing
+                break;
+                
+            // Macro directives are handled in preprocessing
+            case '.macro':
+            case '.endm':
+                // These are handled in preprocessing
+                break;
         }
     }
 
@@ -261,6 +498,15 @@ class TernaryAssembler {
                 if (parts.length < 2) throw new Error('.dw requires a value');
                 const value = this.parseValue(parts[1]);
                 return new Tryte(value & 0x1FF); // Lower 9 bits
+                
+            case '.ascii':
+                // Define ASCII string - return array of character codes
+                if (parts.length < 2) throw new Error('.ascii requires a string');
+                const stringMatch = line.match(/"([^"]*)"/);
+                if (!stringMatch) throw new Error('.ascii requires a quoted string');
+                const str = stringMatch[1];
+                // Return first character, subsequent characters handled in second pass
+                return str.length > 0 ? new Tryte(str.charCodeAt(0)) : null;
             
             default:
                 return null;
@@ -438,6 +684,121 @@ print_num:
 
 .org 100       ; Stack starts at address 100
 stack_start:
+`;
+    }
+
+    static getMacroExample() {
+        return `; Macro Example
+; Demonstrates macro definition and usage
+
+.equ RESULT_ADDR 100
+.equ LOOP_COUNT 5
+
+; Define a macro to load and add a value
+.macro LOAD_ADD addr value
+    LDA addr
+    ADD #value
+    STA addr
+.endm
+
+; Define a macro for conditional jump
+.macro JUMP_IF_ZERO label
+    CMP #0
+    JZ label
+.endm
+
+.org 0
+
+main:
+    ; Initialize result
+    LDA #0
+    STA RESULT_ADDR
+    
+    ; Use macro to add values
+    LOAD_ADD RESULT_ADDR 10
+    LOAD_ADD RESULT_ADDR 20
+    LOAD_ADD RESULT_ADDR 5
+    
+    ; Load final result
+    LDA RESULT_ADDR
+    
+    ; Use conditional macro
+    JUMP_IF_ZERO zero_result
+    
+    OUT    ; Output non-zero result
+    HLT
+    
+zero_result:
+    LDA #999  ; Error indicator
+    OUT
+    HLT
+`;
+    }
+
+    static getConditionalExample() {
+        return `; Conditional Assembly Example
+; Demonstrates conditional compilation
+
+.equ DEBUG 1
+.equ VERSION 2
+
+.org 0
+
+main:
+    LDA #10
+    
+.ifdef DEBUG
+    ; Debug version includes extra output
+    OUT
+    LDA #77  ; Debug marker
+    OUT
+.endif
+
+.if VERSION > 1
+    ; Version 2+ features
+    ADD #5
+.else
+    ; Version 1 features
+    ADD #3
+.endif
+
+    STA result
+    OUT
+    HLT
+
+result:
+    .db 0
+`;
+    }
+
+    static getAdvancedDirectivesExample() {
+        return `; Advanced Directives Example
+; Demonstrates .ascii, .align, and other directives
+
+.org 0
+
+main:
+    LDA #hello_msg
+    JSR print_string
+    HLT
+
+print_string:
+    ; Simple string printing routine
+    OUT
+    RTS
+
+.align 8   ; Align to 8-tryte boundary
+
+hello_msg:
+    .ascii "Hello World!"
+    .db 0      ; Null terminator
+
+.align 4   ; Align data section
+
+data_section:
+    .dw 1000   ; 16-bit value
+    .db 42     ; 8-bit value
+    .ds 10     ; Reserve 10 bytes
 `;
     }
 
