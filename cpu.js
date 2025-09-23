@@ -34,6 +34,9 @@ if (typeof module !== 'undefined' && module.exports) {
     global.InterruptVectorTable = interruptsModule.InterruptVectorTable;
     global.InterruptController = interruptsModule.InterruptController;
     global.ROMChip = interruptsModule.ROMChip;
+    
+    const pipelineModule = require('./pipeline.js');
+    global.InstructionPipeline = pipelineModule.InstructionPipeline;
 }
 
 class TernaryALU {
@@ -350,6 +353,10 @@ class TernaryCPU {
         this.clockManager = new ClockManager();
         this.microcodeEngine = null; // Will be initialized after clockManager
         this.useMicrocode = true; // Flag to enable/disable microcode execution
+        
+        // Pipeline system
+        this.pipeline = new InstructionPipeline(this);
+        this.usePipeline = false; // Flag to enable/disable pipelining
         
         // Interrupt system
         this.romChip = new ROMChip();
@@ -1009,13 +1016,39 @@ class TernaryCPU {
         // Start clock manager
         this.clockManager.start();
         
-        if (this.useMicrocode && this.microcodeEngine) {
+        if (this.usePipeline) {
+            // Pipeline execution mode
+            this.runPipelined();
+        } else if (this.useMicrocode && this.microcodeEngine) {
             // Microcode-driven execution
             this.runMicrocode();
         } else {
             // Legacy execution mode
             this.runLegacy();
         }
+    }
+    
+    runPipelined() {
+        // Enable pipeline
+        this.pipeline.setEnabled(true);
+        
+        // Pipeline-driven execution
+        const pipelineLoop = () => {
+            if (!this.running || this.halted) {
+                this.pipeline.setEnabled(false);
+                this.clockManager.stop();
+                return;
+            }
+            
+            // Tick the pipeline
+            this.pipeline.tick();
+            this.cycleCount++;
+            
+            // Continue execution loop
+            setTimeout(pipelineLoop, 10); // 100Hz execution speed
+        };
+        
+        pipelineLoop();
     }
     
     runMicrocode() {
@@ -1083,6 +1116,9 @@ class TernaryCPU {
         this.cycleCount = 0;
         this.currentInstruction = null;
         
+        // Reset pipeline system
+        this.pipeline.reset();
+        
         // Reset interrupt system
         this.interruptController.reset();
         this.interruptVectorTable.reset();
@@ -1123,7 +1159,8 @@ class TernaryCPU {
                 running: this.running,
                 cycleCount: this.cycleCount,
                 currentInstruction: this.currentInstruction ? this.currentInstruction.toString() : null,
-                useMicrocode: this.useMicrocode
+                useMicrocode: this.useMicrocode,
+                usePipeline: this.usePipeline
             }
         };
         
@@ -1137,6 +1174,11 @@ class TernaryCPU {
             baseState.microcodeStatus = this.microcodeEngine.getState();
         }
         
+        // Add pipeline status
+        if (this.pipeline) {
+            baseState.pipelineStatus = this.pipeline.getState();
+        }
+        
         return baseState;
     }
     
@@ -1148,6 +1190,22 @@ class TernaryCPU {
             this.pause();
             this.run();
         }
+    }
+    
+    // Method to enable/disable pipeline
+    setPipelineEnabled(enabled) {
+        this.usePipeline = enabled;
+        this.pipeline.setEnabled(enabled);
+        if (this.running) {
+            // If changing pipeline mode while running, restart execution
+            this.pause();
+            this.run();
+        }
+    }
+    
+    // Get pipeline statistics
+    getPipelineStats() {
+        return this.pipeline.getState().stats;
     }
 }
 
