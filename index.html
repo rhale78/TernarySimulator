@@ -287,6 +287,46 @@
                 <div>Cycle Count: <span id="cycleCount">0</span></div>
             </div>
             
+            <h3>Pipeline Status</h3>
+            <div class="pipeline-section">
+                <div class="pipeline-info">
+                    <div>Pipeline Enabled: <span id="pipelineEnabled">false</span></div>
+                    <div>Fetch Stage: <span id="fetchStage">empty</span></div>
+                    <div>Decode Stage: <span id="decodeStage">empty</span></div>
+                    <div>Execute Stage: <span id="executeStage">empty</span></div>
+                    <div>Writeback Stage: <span id="writebackStage">empty</span></div>
+                    <div>Pipeline Stalls: <span id="pipelineStalls">0</span></div>
+                    <div>Pipeline Efficiency: <span id="pipelineEfficiency">0%</span></div>
+                </div>
+                <div class="pipeline-controls">
+                    <button id="togglePipelineBtn">Toggle Pipeline</button>
+                    <button id="pipelineStatsBtn">Pipeline Stats</button>
+                </div>
+            </div>
+            
+            <h3>Multi-Core Configuration</h3>
+            <div class="multicore-section">
+                <div class="multicore-info">
+                    <div>Core Count: 
+                        <select id="coreCountSelect">
+                            <option value="1" selected>Single Core</option>
+                            <option value="2">Dual Core</option>
+                        </select>
+                    </div>
+                    <div>Active Core: <span id="activeCoreId">0</span></div>
+                    <div>Parallel Mode: <span id="parallelMode">false</span></div>
+                    <div>Global Cycles: <span id="globalCycles">0</span></div>
+                    <div>Branch Prediction: <span id="branchPredictionEnabled">true</span></div>
+                    <div>Prediction Accuracy: <span id="branchAccuracy">0%</span></div>
+                </div>
+                <div class="multicore-controls">
+                    <button id="applyCoreConfigBtn">Apply Configuration</button>
+                    <button id="switchCoreBtn">Switch Core</button>
+                    <button id="toggleParallelBtn">Toggle Parallel</button>
+                    <button id="multicoreStatsBtn">Core Stats</button>
+                </div>
+            </div>
+            
             <h3>System Status</h3>
             <div class="system-status">
                 <div class="interrupt-section">
@@ -323,6 +363,9 @@
     <script src="clocks.js"></script>
     <script src="microcode.js"></script>
     <script src="interrupts.js"></script>
+    <script src="pipeline.js"></script>
+    <script src="fpu.js"></script>
+    <script src="mmu.js"></script>
     <script src="ternary.js"></script>
     <script src="graphics.js"></script>
     <script src="disk.js"></script>

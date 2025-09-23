@@ -199,14 +199,117 @@ class BalancedTernary {
         return new BalancedTernary(mulResult.result);
     }
 
-    // Comparison
+    // Division using true ternary long division algorithm (component-based)
+    divide(other) {
+        const otherBT = other instanceof BalancedTernary ? other : new BalancedTernary(other);
+        
+        // Check for division by zero using component comparison
+        if (this.isZero(otherBT)) {
+            throw new Error("Division by zero");
+        }
+        
+        // Implement ternary long division using component operations
+        let dividend = new BalancedTernary(this.trits);
+        let divisor = new BalancedTernary(otherBT.trits);
+        let quotient = new BalancedTernary(0);
+        let remainder = new BalancedTernary(0);
+        
+        // Handle sign using ternary logic
+        const dividendNegative = this.isNegative();
+        const divisorNegative = otherBT.isNegative();
+        const resultNegative = dividendNegative !== divisorNegative;
+        
+        // Work with absolute values
+        if (dividendNegative) dividend = dividend.negate();
+        if (divisorNegative) divisor = divisor.negate();
+        
+        // Ternary long division algorithm using repeated subtraction
+        while (this.compareComponents(dividend, divisor) >= 0) {
+            dividend = dividend.subtract(divisor);
+            quotient = quotient.add(new BalancedTernary(1));
+        }
+        
+        // Apply result sign
+        if (resultNegative) {
+            quotient = quotient.negate();
+        }
+        
+        return quotient;
+    }
+
+    // Modulo operation using true ternary arithmetic
+    modulo(other) {
+        const otherBT = other instanceof BalancedTernary ? other : new BalancedTernary(other);
+        
+        // Check for division by zero
+        if (this.isZero(otherBT)) {
+            throw new Error("Division by zero");
+        }
+        
+        // Calculate quotient and remainder using ternary arithmetic
+        const quotient = this.divide(otherBT);
+        const product = quotient.multiply(otherBT);
+        const remainder = this.subtract(product);
+        
+        return remainder;
+    }
+
+    // Helper methods for ternary comparison without using host CPU
+    isZero(value) {
+        const bt = value instanceof BalancedTernary ? value : new BalancedTernary(value);
+        return bt.trits.every(trit => trit === 0);
+    }
+    
+    isNegative() {
+        // Find the most significant non-zero trit
+        for (let i = this.trits.length - 1; i >= 0; i--) {
+            if (this.trits[i] !== 0) {
+                return this.trits[i] === -1;
+            }
+        }
+        return false;
+    }
+
+    // Component-based comparison without using toDecimal
+    compareComponents(a, b) {
+        const aBT = a instanceof BalancedTernary ? a : new BalancedTernary(a);
+        const bBT = b instanceof BalancedTernary ? b : new BalancedTernary(b);
+        
+        // Normalize both values to same length
+        const maxLength = Math.max(aBT.trits.length, bBT.trits.length);
+        const aNorm = aBT.toWidth(maxLength);
+        const bNorm = bBT.toWidth(maxLength);
+        
+        // Compare from most significant trit down
+        for (let i = maxLength - 1; i >= 0; i--) {
+            const aTrit = aNorm.trits[i] || 0;
+            const bTrit = bNorm.trits[i] || 0;
+            
+            if (aTrit > bTrit) return 1;
+            if (aTrit < bTrit) return -1;
+        }
+        
+        return 0;
+    }
+
+    // Comparison using component-based ternary arithmetic
     compare(other) {
         const otherBT = other instanceof BalancedTernary ? other : new BalancedTernary(other);
-        const diff = this.subtract(otherBT);
-        const decimal = diff.toDecimal();
         
-        if (decimal > 0) return 1;
-        if (decimal < 0) return -1;
+        // Normalize both values to same length
+        const maxLength = Math.max(this.trits.length, otherBT.trits.length);
+        const aNorm = this.toWidth(maxLength);
+        const bNorm = otherBT.toWidth(maxLength);
+        
+        // Compare from most significant trit down
+        for (let i = maxLength - 1; i >= 0; i--) {
+            const aTrit = aNorm.trits[i] || 0;
+            const bTrit = bNorm.trits[i] || 0;
+            
+            if (aTrit > bTrit) return 1;
+            if (aTrit < bTrit) return -1;
+        }
+        
         return 0;
     }
 
@@ -251,6 +354,47 @@ class BalancedTernary {
     not() {
         // Ternary NOT: -1 -> +1, 0 -> 0, +1 -> -1
         const result = this.trits.map(trit => -trit);
+        return new BalancedTernary(result);
+    }
+
+    xor(other) {
+        const otherBT = other instanceof BalancedTernary ? other : new BalancedTernary(other);
+        const maxLength = Math.max(this.trits.length, otherBT.trits.length);
+        const result = [];
+
+        for (let i = 0; i < maxLength; i++) {
+            const a = i < this.trits.length ? this.trits[i] : 0;
+            const b = i < otherBT.trits.length ? otherBT.trits[i] : 0;
+            
+            // Ternary XOR: Different when values differ, 0 when same
+            if (a === b) {
+                result.push(0);
+            } else if ((a === -1 && b === 1) || (a === 1 && b === -1)) {
+                result.push(0); // Maximum difference results in neutral
+            } else {
+                result.push(a !== 0 ? a : b); // Non-zero dominates
+            }
+        }
+
+        return new BalancedTernary(result);
+    }
+
+    // Rotation operations
+    rotateLeft(positions = 1) {
+        const len = this.trits.length;
+        if (len === 0) return new BalancedTernary([]);
+        
+        const actualPositions = positions % len;
+        const result = [...this.trits.slice(actualPositions), ...this.trits.slice(0, actualPositions)];
+        return new BalancedTernary(result);
+    }
+
+    rotateRight(positions = 1) {
+        const len = this.trits.length;
+        if (len === 0) return new BalancedTernary([]);
+        
+        const actualPositions = positions % len;
+        const result = [...this.trits.slice(-actualPositions), ...this.trits.slice(0, -actualPositions)];
         return new BalancedTernary(result);
     }
 
@@ -333,6 +477,52 @@ class DoubleWord extends BalancedTernary {
     toString(format = 'standard') {
         return super.toString(format);
     }
+    
+    // Word-specific operations for extended arithmetic
+    divide(other) {
+        const result = super.divide(other);
+        return new DoubleWord(result.trits);
+    }
+    
+    modulo(other) {
+        const result = super.modulo(other);
+        return new DoubleWord(result.trits);
+    }
+    
+    xor(other) {
+        const result = super.xor(other);
+        return new DoubleWord(result.trits);
+    }
+    
+    add(other) {
+        const result = super.add(other);
+        return new DoubleWord(result.trits);
+    }
+    
+    subtract(other) {
+        const result = super.subtract(other);
+        return new DoubleWord(result.trits);
+    }
+    
+    multiply(other) {
+        const result = super.multiply(other);
+        return new DoubleWord(result.trits);
+    }
+    
+    and(other) {
+        const result = super.and(other);
+        return new DoubleWord(result.trits);
+    }
+    
+    or(other) {
+        const result = super.or(other);
+        return new DoubleWord(result.trits);
+    }
+    
+    not() {
+        const result = super.not();
+        return new DoubleWord(result.trits);
+    }
 }
 
 // Triple-word class - 18 trits
@@ -358,6 +548,52 @@ class TripleWord extends BalancedTernary {
 
     toString(format = 'standard') {
         return super.toString(format);
+    }
+    
+    // Triple-word specific operations for extended arithmetic
+    divide(other) {
+        const result = super.divide(other);
+        return new TripleWord(result.trits);
+    }
+    
+    modulo(other) {
+        const result = super.modulo(other);
+        return new TripleWord(result.trits);
+    }
+    
+    xor(other) {
+        const result = super.xor(other);
+        return new TripleWord(result.trits);
+    }
+    
+    add(other) {
+        const result = super.add(other);
+        return new TripleWord(result.trits);
+    }
+    
+    subtract(other) {
+        const result = super.subtract(other);
+        return new TripleWord(result.trits);
+    }
+    
+    multiply(other) {
+        const result = super.multiply(other);
+        return new TripleWord(result.trits);
+    }
+    
+    and(other) {
+        const result = super.and(other);
+        return new TripleWord(result.trits);
+    }
+    
+    or(other) {
+        const result = super.or(other);
+        return new TripleWord(result.trits);
+    }
+    
+    not() {
+        const result = super.not();
+        return new TripleWord(result.trits);
     }
 }
 

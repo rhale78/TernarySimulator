@@ -27,12 +27,15 @@ class TernaryAssembler {
             // Core data movement
             'LDA': 1, 'STA': 2, 'LDX': 3, 'STX': 4, 'MOV': 5,
             // Core arithmetic 
-            'ADD': 6, 'SUB': 7, 'MUL': 8, 'INC': 9, 'DEC': 10,
+            'ADD': 6, 'SUB': 7, 'MUL': 8, 'DIV': 50, 'MOD': 51, 'INC': 9, 'DEC': 10,
             // Core logical
-            'AND': 11, 'OR': 12, 'NOT': 13,
+            'AND': 11, 'OR': 12, 'XOR': 52, 'NOT': 13,
+            // Bit/Trit operations  
+            'SHL': 53, 'SHR': 54, 'ROL': 55, 'ROR': 56,
             // Control flow
             'CMP': -1, 'JMP': -2, 'JZ': -3, 'JP': -4, 'JN': -5, 
-            'JSR': -6, 'RTS': -7,
+            'JNZ': 57, 'JC': 58, 'JNC': 59, 'JSR': -6, 'RTS': -7,
+            'CALL': 60, 'RET': 61, // x86-style aliases
             // Stack and I/O
             'PSH': -8, 'POP': -9, 'IN': -10, 'OUT': -11,
             // Essential new instructions  
@@ -46,6 +49,8 @@ class TernaryAssembler {
             'ADDW': 16,  // Add Word
             'SUBW': 17,  // Subtract Word
             'MULW': 18,  // Multiply Word
+            'DIVW': 62,  // Divide Word
+            'XORW': 63,  // XOR Word
             
             // Triple-word operations  
             'LDAT': 19,  // Load Accumulator Triple-word (18 trits)
@@ -53,6 +58,8 @@ class TernaryAssembler {
             'ADDT': 21,  // Add Triple-word
             'SUBT': 22,  // Subtract Triple-word
             'MULT': 23,  // Multiply Triple-word
+            'DIVT': 64,  // Divide Triple-word
+            'XORT': 65,  // XOR Triple-word
             
             // Memory block operations
             'MOVC': 24,  // Memory copy block
@@ -86,7 +93,21 @@ class TernaryAssembler {
             'UMP': 46,   // Unmap virtual page
             'FLT': 47,   // Flush TLB
             'LVA': 48,   // Load from virtual address
-            'SVA': 49    // Store to virtual address
+            'SVA': 49,   // Store to virtual address
+            
+            // Binary arithmetic and logic operations
+            'BADD': 66,  // Binary add
+            'BSUB': 67,  // Binary subtract
+            'BMUL': 68,  // Binary multiply
+            'BDIV': 69,  // Binary divide
+            'BAND': 70,  // Binary AND
+            'BOR': 71,   // Binary OR
+            'BXOR': 72,  // Binary XOR
+            'BNOT': 73,  // Binary NOT
+            
+            // Conversion operations (machine-level component-based)
+            'T2B': 74,   // Ternary to binary conversion
+            'B2T': 75    // Binary to ternary conversion
         };
 
         // Register names

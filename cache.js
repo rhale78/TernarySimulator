@@ -124,11 +124,12 @@ class Cache {
     
     findLRUVictim(startIndex, endIndex) {
         let lruIndex = startIndex;
-        let lruTime = this.lines[startIndex].lastAccessed;
+        let lruTime = this.lines[startIndex] ? this.lines[startIndex].lastAccessed || 0 : 0;
         
         for (let i = startIndex + 1; i < endIndex; i++) {
-            if (this.lines[i].lastAccessed < lruTime) {
-                lruTime = this.lines[i].lastAccessed;
+            const currentTime = this.lines[i] ? this.lines[i].lastAccessed || 0 : 0;
+            if (currentTime < lruTime) {
+                lruTime = currentTime;
                 lruIndex = i;
             }
         }
@@ -177,10 +178,12 @@ class Cache {
             // Cache hit - update existing line
             this.hits++;
             const line = this.lines[lineIndex];
-            line.data = data;
-            line.updateAccess(this.timestamp);
-            if (!writeThrough) {
-                line.markDirty();
+            if (line) {
+                line.data = data;
+                line.updateAccess(this.timestamp);
+                if (!writeThrough) {
+                    line.markDirty();
+                }
             }
             return { hit: true, evicted: null };
         } else {
@@ -190,7 +193,7 @@ class Cache {
             const line = this.lines[lineIndex];
             
             let evicted = null;
-            if (line.valid) {
+            if (line && line.valid) {
                 this.evictions++;
                 if (line.dirty) {
                     this.writebacks++;
@@ -201,9 +204,11 @@ class Cache {
                 }
             }
             
-            line.setData(tag, data, this.timestamp);
-            if (!writeThrough) {
-                line.markDirty();
+            if (line) {
+                line.setData(tag, data, this.timestamp);
+                if (!writeThrough) {
+                    line.markDirty();
+                }
             }
             
             return { hit: false, evicted: evicted };
