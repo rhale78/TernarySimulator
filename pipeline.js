@@ -31,11 +31,17 @@ class PipelineInstruction {
         this.opcode = null;            // Decoded opcode
         this.operand = null;           // Decoded operand
         this.instructionRef = null;    // Reference to instruction implementation
+        this.mnemonic = null;          // Instruction mnemonic for debugging
         this.result = null;            // Execution result
         this.writeTarget = null;       // Where to write the result
         this.completed = false;        // Instruction completed
         this.stalled = false;          // Instruction stalled due to dependency
         this.hazard = null;           // Type of hazard detected
+        this.canForward = false;      // Can resolve hazard with forwarding
+        this.forwardedValue = null;   // Value received via forwarding
+        this.branchPredicted = null;  // Branch prediction (true/false/null)
+        this.branchAddress = null;    // Address of branch instruction
+        this.speculative = false;     // Instruction fetched speculatively
     }
 }
 
@@ -61,7 +67,9 @@ class InstructionPipeline {
             totalInstructions: 0,
             stallCycles: 0,
             hazardCount: 0,
-            throughput: 0
+            throughput: 0,
+            forwardingEvents: 0,
+            branchMispredictions: 0
         };
         
         // Hazard detection
@@ -71,6 +79,20 @@ class InstructionPipeline {
         // Pipeline control
         this.stalled = false;
         this.flushing = false;
+        
+        // Data forwarding unit
+        this.forwardingUnit = {
+            enabled: true,
+            forwardFromExecute: null,    // Data available from execute stage
+            forwardFromWriteback: null,  // Data available from writeback stage
+            forwardingPaths: new Map()   // Track forwarding paths
+        };
+        
+        // Branch prediction integration
+        this.branchPredictor = null;
+        this.predictedPC = null;
+        this.branchTarget = null;
+        this.speculativeExecution = false;
     }
     
     /**
@@ -81,6 +103,22 @@ class InstructionPipeline {
         if (!enabled) {
             this.flush();
         }
+    }
+    
+    /**
+     * Set branch predictor for the pipeline
+     */
+    setBranchPredictor(predictor) {
+        this.branchPredictor = predictor;
+        console.log(`Pipeline: Branch predictor set to ${predictor.type}`);
+    }
+    
+    /**
+     * Enable/disable data forwarding
+     */
+    setForwardingEnabled(enabled) {
+        this.forwardingUnit.enabled = enabled;
+        console.log(`Pipeline: Data forwarding ${enabled ? 'enabled' : 'disabled'}`);
     }
     
     /**
@@ -102,7 +140,7 @@ class InstructionPipeline {
     }
     
     /**
-     * Fetch Stage: Get next instruction from memory
+     * Fetch Stage: Get next instruction from memory with branch prediction
      */
     tickFetch() {
         // Don't fetch if pipeline is stalled or fetch stage is occupied
@@ -110,7 +148,13 @@ class InstructionPipeline {
             return;
         }
         
-        const pc = this.cpu.registers.get('pc');
+        let pc = this.cpu.registers.get('pc');
+        
+        // Use predicted PC if available from branch predictor
+        if (this.predictedPC && this.speculativeExecution) {
+            pc = this.predictedPC;
+            this.predictedPC = null; // Clear after use
+        }
         
         // Check breakpoints
         if (this.cpu.breakpoints.has(pc.toString())) {
@@ -123,6 +167,7 @@ class InstructionPipeline {
             // Create new pipeline instruction
             const pipelineInstr = new PipelineInstruction();
             pipelineInstr.pc = new TernaryAddress(pc.toDecimal(), 9);
+            pipelineInstr.speculative = this.speculativeExecution;
             
             // Fetch from ROM or memory
             if (this.cpu.romChip && this.cpu.romChip.isInRange(pc)) {
@@ -134,8 +179,10 @@ class InstructionPipeline {
             // Place in fetch stage
             this.stages[PipelineStages.FETCH] = pipelineInstr;
             
-            // Increment PC for next fetch
-            this.cpu.registers.set('pc', pc.increment());
+            // Increment PC for next fetch (unless speculative execution overrides)
+            if (!this.speculativeExecution) {
+                this.cpu.registers.set('pc', pc.increment());
+            }
             
         } catch (error) {
             console.error(`Fetch error: ${error.message}`);
@@ -143,7 +190,7 @@ class InstructionPipeline {
     }
     
     /**
-     * Decode Stage: Decode instruction and check for hazards
+     * Decode Stage: Decode instruction and check for hazards with forwarding
      */
     tickDecode() {
         const fetchedInstr = this.stages[PipelineStages.FETCH];
@@ -174,15 +221,21 @@ class InstructionPipeline {
             for (let [mnemonic, instrImpl] of Object.entries(this.cpu.instructions)) {
                 if (instrImpl.opcode === instr.opcode) {
                     instr.instructionRef = instrImpl;
+                    instr.mnemonic = mnemonic;
                     break;
                 }
             }
             
-            // Check for hazards
-            this.detectHazards(instr);
+            // Check for branch prediction opportunity
+            if (this.branchPredictor && this.isControlFlowInstruction(instr.opcode)) {
+                this.handleBranchPrediction(instr);
+            }
             
-            // If hazard detected, stall pipeline
-            if (instr.hazard) {
+            // Check for hazards (with forwarding consideration)
+            this.detectHazardsWithForwarding(instr);
+            
+            // If hazard detected and can't be resolved with forwarding, stall pipeline
+            if (instr.hazard && !instr.canForward) {
                 this.stalled = true;
                 this.stats.stallCycles++;
                 this.stats.hazardCount++;
@@ -195,7 +248,7 @@ class InstructionPipeline {
     }
     
     /**
-     * Execute Stage: Execute the instruction
+     * Execute Stage: Execute the instruction with data forwarding
      */
     tickExecute() {
         const decodedInstr = this.stages[PipelineStages.DECODE];
@@ -210,6 +263,11 @@ class InstructionPipeline {
         if (!instr) return;
         
         try {
+            // Apply data forwarding if needed
+            if (instr.canForward && this.forwardingUnit.enabled) {
+                this.applyDataForwarding(instr);
+            }
+            
             // Special handling for halt instruction
             if (instr.opcode === -13) {
                 this.cpu.halt();
@@ -219,12 +277,18 @@ class InstructionPipeline {
             
             // Special handling for control flow instructions
             if (this.isControlFlowInstruction(instr.opcode)) {
-                this.handleControlFlow(instr);
+                this.handleControlFlowWithPrediction(instr);
             } else {
                 // Execute regular instruction
                 if (instr.instructionRef) {
+                    // Store previous state for forwarding
+                    const prevAccValue = this.cpu.registers.get('acc');
+                    
                     instr.instructionRef.execute(instr.operand);
                     instr.completed = true;
+                    
+                    // Update forwarding unit with result
+                    this.updateForwardingUnit(instr, prevAccValue, this.cpu.registers.get('acc'));
                 }
             }
             
@@ -271,22 +335,192 @@ class InstructionPipeline {
     }
     
     /**
-     * Detect data and control hazards
+     * Detect data and control hazards with forwarding consideration
      */
-    detectHazards(instr) {
+    detectHazardsWithForwarding(instr) {
         // Check for data hazards (read-after-write)
         if (this.hasDataHazard(instr)) {
             instr.hazard = 'DATA';
+            
+            // Check if forwarding can resolve the hazard
+            if (this.forwardingUnit.enabled && this.canResolveWithForwarding(instr)) {
+                instr.canForward = true;
+                instr.hazard = null; // Forwarding resolves the hazard
+            } else {
+                instr.canForward = false;
+            }
             return;
         }
         
         // Check for control hazards (branches, jumps)
         if (this.hasControlHazard(instr)) {
             instr.hazard = 'CONTROL';
+            // Control hazards may be resolved with branch prediction
             return;
         }
         
         instr.hazard = null;
+        instr.canForward = false;
+    }
+    
+    /**
+     * Check if data hazard can be resolved with forwarding
+     */
+    canResolveWithForwarding(instr) {
+        const executingInstr = this.stages[PipelineStages.EXECUTE];
+        const writebackInstr = this.stages[PipelineStages.WRITEBACK];
+        
+        // Can forward from execute stage if instruction produces result
+        if (executingInstr && this.writesToRegister(executingInstr) && this.readsFromRegister(instr)) {
+            return true;
+        }
+        
+        // Can forward from writeback stage
+        if (writebackInstr && this.writesToRegister(writebackInstr) && this.readsFromRegister(instr)) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Apply data forwarding to instruction
+     */
+    applyDataForwarding(instr) {
+        const executingInstr = this.stages[PipelineStages.EXECUTE];
+        const writebackInstr = this.stages[PipelineStages.WRITEBACK];
+        
+        let forwardedValue = null;
+        let forwardSource = null;
+        
+        // Priority: Execute stage first (more recent), then writeback
+        if (executingInstr && this.forwardingUnit.forwardFromExecute) {
+            forwardedValue = this.forwardingUnit.forwardFromExecute;
+            forwardSource = 'EXECUTE';
+        } else if (writebackInstr && this.forwardingUnit.forwardFromWriteback) {
+            forwardedValue = this.forwardingUnit.forwardFromWriteback;
+            forwardSource = 'WRITEBACK';
+        }
+        
+        if (forwardedValue !== null) {
+            // Apply forwarded value to accumulator before execution
+            this.cpu.registers.set('acc', forwardedValue);
+            
+            // Track forwarding event
+            this.stats.forwardingEvents++;
+            this.forwardingUnit.forwardingPaths.set(instr.pc.toString(), {
+                source: forwardSource,
+                value: forwardedValue.toString(),
+                timestamp: Date.now()
+            });
+            
+            console.log(`Pipeline: Forwarded value ${forwardedValue.toString()} from ${forwardSource} to instruction at ${instr.pc.toString()}`);
+        }
+    }
+    
+    /**
+     * Update forwarding unit with execution results
+     */
+    updateForwardingUnit(instr, prevValue, newValue) {
+        if (this.writesToRegister(instr)) {
+            this.forwardingUnit.forwardFromExecute = newValue;
+            
+            // Move previous execute value to writeback
+            this.forwardingUnit.forwardFromWriteback = this.forwardingUnit.forwardFromExecute;
+        }
+    }
+    
+    /**
+     * Handle branch prediction during decode
+     */
+    handleBranchPrediction(instr) {
+        if (!this.branchPredictor) return;
+        
+        const branchAddress = instr.pc.toDecimal();
+        const prediction = this.branchPredictor.predict(branchAddress, instr);
+        
+        instr.branchPredicted = prediction;
+        instr.branchAddress = branchAddress;
+        
+        if (prediction) {
+            // Calculate predicted target (simplified)
+            this.predictedPC = new TernaryAddress(branchAddress + instr.operand, 9);
+            this.speculativeExecution = true;
+            console.log(`Pipeline: Branch predicted TAKEN at ${instr.pc.toString()}, target: ${this.predictedPC.toString()}`);
+        } else {
+            this.speculativeExecution = false;
+            console.log(`Pipeline: Branch predicted NOT TAKEN at ${instr.pc.toString()}`);
+        }
+    }
+    
+    /**
+     * Handle control flow with branch prediction validation
+     */
+    handleControlFlowWithPrediction(instr) {
+        const actualTaken = this.evaluateBranchCondition(instr);
+        
+        // Check if prediction was correct
+        if (instr.branchPredicted !== undefined) {
+            const predictionCorrect = (instr.branchPredicted === actualTaken);
+            
+            if (!predictionCorrect) {
+                // Misprediction detected - flush pipeline
+                this.stats.branchMispredictions++;
+                this.flushPipeline();
+                console.log(`Pipeline: Branch mispredicted at ${instr.pc.toString()}, flushing pipeline`);
+            }
+            
+            // Update branch predictor
+            if (this.branchPredictor) {
+                this.branchPredictor.update(instr.branchAddress, actualTaken, instr);
+            }
+        }
+        
+        // Execute the actual branch
+        this.handleControlFlow(instr);
+        instr.completed = true;
+    }
+    
+    /**
+     * Evaluate if branch should be taken
+     */
+    evaluateBranchCondition(instr) {
+        const flags = this.cpu.alu.flags;
+        
+        switch (instr.opcode) {
+            case -2: return true;  // JMP - always taken
+            case -3: return flags.zero === 1;   // JZ - taken if zero
+            case -4: return flags.positive === 1; // JP - taken if positive  
+            case -5: return flags.negative === 1; // JN - taken if negative
+            case -6: return true;  // JSR - always taken
+            case -7: return true;  // RTS - always taken
+            default: return false;
+        }
+    }
+    
+    /**
+     * Flush pipeline due to misprediction
+     */
+    flushPipeline() {
+        this.flushing = true;
+        
+        // Clear all pipeline stages except writeback (let it complete)
+        this.stages[PipelineStages.FETCH] = null;
+        this.stages[PipelineStages.DECODE] = null;
+        this.stages[PipelineStages.EXECUTE] = null;
+        
+        // Clear forwarding unit
+        this.forwardingUnit.forwardFromExecute = null;
+        this.forwardingUnit.forwardFromWriteback = null;
+        
+        // Reset speculative execution
+        this.speculativeExecution = false;
+        this.predictedPC = null;
+        
+        // Resume after one cycle
+        setTimeout(() => {
+            this.flushing = false;
+        }, 1);
     }
     
     /**

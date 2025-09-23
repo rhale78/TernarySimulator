@@ -625,6 +625,19 @@ class TernaryCPU {
             'T2B': { opcode: 74, execute: this.ternaryToBinary.bind(this) },     // Ternary to binary conversion
             'B2T': { opcode: 75, execute: this.binaryToTernary.bind(this) },     // Binary to ternary conversion
             
+            // Multi-core synchronization operations
+            'LOCK': { opcode: 76, execute: this.lockMemory.bind(this) },         // Lock memory for atomic operation
+            'UNLOCK': { opcode: 77, execute: this.unlockMemory.bind(this) },     // Unlock memory
+            'TAS': { opcode: 78, execute: this.testAndSet.bind(this) },          // Test and set (atomic)
+            'CMPXCHG': { opcode: 79, execute: this.compareAndExchange.bind(this) }, // Compare and exchange (atomic)
+            'MFENCE': { opcode: 80, execute: this.memoryFence.bind(this) },      // Memory fence/barrier
+            'ICORE': { opcode: 81, execute: this.interruptCore.bind(this) },     // Interrupt specific core
+            'BCAST': { opcode: 82, execute: this.broadcastInterrupt.bind(this) }, // Broadcast interrupt to all cores
+            'SYNC': { opcode: 83, execute: this.synchronizeCore.bind(this) },    // Synchronize with other cores
+            'GETCID': { opcode: 84, execute: this.getCoreId.bind(this) },        // Get current core ID
+            'ALOAD': { opcode: 85, execute: this.atomicLoad.bind(this) },        // Atomic load
+            'ASTORE': { opcode: 86, execute: this.atomicStore.bind(this) },      // Atomic store
+            
             'NOP': { opcode: 0,  execute: this.noOperation.bind(this) },         // No operation
             'HLT': { opcode: -13, execute: this.halt.bind(this) }                // Halt
         };
@@ -2421,6 +2434,280 @@ class TernaryCPU {
     // Get pipeline statistics
     getPipelineStats() {
         return this.pipeline.getState().stats;
+    }
+    
+    // Multi-core synchronization operations
+    
+    /**
+     * LOCK - Lock memory address for atomic operations
+     */
+    lockMemory(operand) {
+        const address = (typeof operand === 'number') ? 
+            new TernaryAddress(operand, 9) : operand;
+        
+        if (!this.multiCoreLocks) {
+            this.multiCoreLocks = new Map();
+        }
+        
+        const addressKey = address.toString();
+        
+        // Check if already locked by another core
+        if (this.multiCoreLocks.has(addressKey)) {
+            const lockingCore = this.multiCoreLocks.get(addressKey);
+            if (lockingCore !== this.coreId) {
+                // Lock contention - stall this core
+                this.stalled = true;
+                this.alu.flags.carry = -1; // Indicate lock failed
+                return;
+            }
+        }
+        
+        // Acquire lock
+        this.multiCoreLocks.set(addressKey, this.coreId || 0);
+        this.alu.flags.carry = 1; // Indicate lock acquired
+        
+        console.log(`Core ${this.coreId || 0}: LOCK acquired on address ${addressKey}`);
+    }
+    
+    /**
+     * UNLOCK - Unlock memory address
+     */
+    unlockMemory(operand) {
+        const address = (typeof operand === 'number') ? 
+            new TernaryAddress(operand, 9) : operand;
+        
+        if (!this.multiCoreLocks) {
+            this.multiCoreLocks = new Map();
+        }
+        
+        const addressKey = address.toString();
+        
+        // Check if this core owns the lock
+        if (this.multiCoreLocks.has(addressKey)) {
+            const lockingCore = this.multiCoreLocks.get(addressKey);
+            if (lockingCore === (this.coreId || 0)) {
+                this.multiCoreLocks.delete(addressKey);
+                this.alu.flags.carry = 1; // Indicate unlock successful
+                console.log(`Core ${this.coreId || 0}: UNLOCK released on address ${addressKey}`);
+            } else {
+                this.alu.flags.carry = -1; // Indicate unlock failed - not owner
+            }
+        } else {
+            this.alu.flags.carry = 0; // Address was not locked
+        }
+    }
+    
+    /**
+     * TAS - Test and Set (atomic)
+     */
+    testAndSet(operand) {
+        const address = (typeof operand === 'number') ? 
+            new TernaryAddress(operand, 9) : operand;
+        
+        // This is an atomic operation - temporarily lock the address
+        this.lockMemory(operand);
+        
+        if (this.alu.flags.carry === 1) { // Lock acquired
+            try {
+                // Read current value
+                const currentValue = this.memory.read(address);
+                this.registers.set('acc', currentValue);
+                
+                // Set to 1 (or maximum positive value)
+                this.memory.write(address, new Tryte(1));
+                
+                // Set flags based on previous value
+                this.alu.updateFlags(currentValue);
+                
+                console.log(`Core ${this.coreId || 0}: TAS on ${address.toString()}, old value: ${currentValue.toString()}`);
+                
+            } finally {
+                // Always unlock
+                this.unlockMemory(operand);
+            }
+        }
+    }
+    
+    /**
+     * CMPXCHG - Compare and Exchange (atomic)
+     */
+    compareAndExchange(operand) {
+        const address = (typeof operand === 'number') ? 
+            new TernaryAddress(operand, 9) : operand;
+        
+        this.lockMemory(operand);
+        
+        if (this.alu.flags.carry === 1) { // Lock acquired
+            try {
+                const currentValue = this.memory.read(address);
+                const expectedValue = this.registers.get('acc');
+                const newValue = this.registers.get('ix');
+                
+                if (currentValue.equals(expectedValue)) {
+                    // Values match - perform exchange
+                    this.memory.write(address, newValue);
+                    this.alu.flags.zero = 1; // Indicate exchange successful
+                    console.log(`Core ${this.coreId || 0}: CMPXCHG successful on ${address.toString()}`);
+                } else {
+                    // Values don't match - load current value into accumulator
+                    this.registers.set('acc', currentValue);
+                    this.alu.flags.zero = -1; // Indicate exchange failed
+                }
+                
+            } finally {
+                this.unlockMemory(operand);
+            }
+        }
+    }
+    
+    /**
+     * MFENCE - Memory fence/barrier
+     */
+    memoryFence(operand) {
+        // Ensure all previous memory operations complete before continuing
+        if (this.memory.cache) {
+            this.memory.cache.flush();
+        }
+        
+        // Add small delay to simulate fence overhead
+        this.cycleCount += 2;
+        
+        console.log(`Core ${this.coreId || 0}: Memory fence executed`);
+    }
+    
+    /**
+     * ICORE - Interrupt specific core
+     */
+    interruptCore(operand) {
+        const targetCore = (typeof operand === 'number') ? operand : operand.toDecimal();
+        
+        if (this.multiCoreSystem && this.multiCoreSystem.cores) {
+            if (targetCore >= 0 && targetCore < this.multiCoreSystem.cores.length) {
+                const target = this.multiCoreSystem.cores[targetCore];
+                
+                // Send inter-core interrupt
+                if (target.interruptController) {
+                    target.interruptController.requestInterrupt(14);
+                    
+                    this.alu.flags.carry = 1; // Indicate interrupt sent
+                    console.log(`Core ${this.coreId || 0}: Interrupt sent to core ${targetCore}`);
+                } else {
+                    this.alu.flags.carry = -1; // Target core not available
+                }
+            } else {
+                this.alu.flags.carry = -1; // Invalid target core
+            }
+        } else {
+            this.alu.flags.carry = 0; // Not in multi-core system
+        }
+    }
+    
+    /**
+     * BCAST - Broadcast interrupt to all cores
+     */
+    broadcastInterrupt(operand) {
+        const interruptType = (typeof operand === 'number') ? operand : operand.toDecimal();
+        
+        if (this.multiCoreSystem && this.multiCoreSystem.cores) {
+            let sent = 0;
+            
+            for (let i = 0; i < this.multiCoreSystem.cores.length; i++) {
+                if (i !== (this.coreId || 0)) { // Don't interrupt self
+                    const target = this.multiCoreSystem.cores[i];
+                    
+                    if (target.interruptController) {
+                        target.interruptController.requestInterrupt(interruptType);
+                        sent++;
+                    }
+                }
+            }
+            
+            this.registers.set('acc', new Tryte(sent));
+            console.log(`Core ${this.coreId || 0}: Broadcast interrupt sent to ${sent} cores`);
+        } else {
+            this.registers.set('acc', new Tryte(0));
+        }
+    }
+    
+    /**
+     * SYNC - Synchronize with other cores
+     */
+    synchronizeCore(operand) {
+        const syncPoint = (typeof operand === 'number') ? operand : operand.toDecimal();
+        
+        if (!this.syncBarriers) {
+            this.syncBarriers = new Map();
+        }
+        
+        if (!this.syncBarriers.has(syncPoint)) {
+            this.syncBarriers.set(syncPoint, new Set());
+        }
+        
+        const barrier = this.syncBarriers.get(syncPoint);
+        barrier.add(this.coreId || 0);
+        
+        // Check if all cores have reached this sync point
+        const expectedCores = this.multiCoreSystem ? this.multiCoreSystem.coreCount : 1;
+        
+        if (barrier.size >= expectedCores) {
+            // All cores synchronized - clear barrier
+            this.syncBarriers.delete(syncPoint);
+            this.alu.flags.zero = 1; // Indicate sync complete
+            console.log(`All cores synchronized at point ${syncPoint}`);
+        } else {
+            // Wait for other cores
+            this.stalled = true;
+            this.alu.flags.zero = 0; // Indicate waiting
+        }
+    }
+    
+    /**
+     * GETCID - Get current core ID
+     */
+    getCoreId(operand) {
+        this.registers.set('acc', new Tryte(this.coreId || 0));
+        console.log(`Core ${this.coreId || 0}: Core ID loaded into accumulator`);
+    }
+    
+    /**
+     * ALOAD - Atomic load
+     */
+    atomicLoad(operand) {
+        const address = (typeof operand === 'number') ? 
+            new TernaryAddress(operand, 9) : operand;
+        
+        this.lockMemory(operand);
+        
+        if (this.alu.flags.carry === 1) { // Lock acquired
+            try {
+                const value = this.memory.read(address);
+                this.registers.set('acc', value);
+                console.log(`Core ${this.coreId || 0}: Atomic load from ${address.toString()}`);
+                
+            } finally {
+                this.unlockMemory(operand);
+            }
+        }
+    }
+    
+    /**
+     * ASTORE - Atomic store
+     */
+    atomicStore(operand) {
+        const address = (typeof operand === 'number') ? 
+            new TernaryAddress(operand, 9) : operand;
+        
+        this.lockMemory(operand);
+        
+        if (this.alu.flags.carry === 1) { // Lock acquired
+            try {
+                this.memory.write(address, this.registers.get('acc'));
+                console.log(`Core ${this.coreId || 0}: Atomic store to ${address.toString()}`);
+                
+            } finally {
+                this.unlockMemory(operand);
+            }
+        }
     }
 }
 
