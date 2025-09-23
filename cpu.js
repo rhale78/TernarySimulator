@@ -601,6 +601,7 @@ class TernaryCPU {
             'MSK': { opcode: 40, execute: this.maskInterrupt.bind(this) },       // Mask interrupt
             'UMK': { opcode: 41, execute: this.unmaskInterrupt.bind(this) },     // Unmask interrupt
             'SML': { opcode: 42, execute: this.setMaskLevel.bind(this) },        // Set mask level
+            'SYSCALL': { opcode: 76, execute: this.systemCall.bind(this) },      // System call
             
             // Memory Management Unit operations
             'MPG': { opcode: 43, execute: this.enablePaging.bind(this) },        // Enable/disable paging
@@ -643,27 +644,97 @@ class TernaryCPU {
         };
     }
 
+    // Helper method to resolve different addressing modes
+    resolveOperand(operand, isWrite = false) {
+        // If it's just a number, treat as immediate or direct address
+        if (typeof operand === 'number') {
+            return operand;
+        }
+        
+        // If it's an object with addressing mode info
+        if (typeof operand === 'object' && operand.mode) {
+            switch (operand.mode) {
+                case 'direct':
+                    if (isWrite) {
+                        return new TernaryAddress(operand.address, 9);
+                    } else {
+                        return this.memory.read(new TernaryAddress(operand.address, 9));
+                    }
+                    
+                case 'indirect':
+                    const indirectAddr = this.memory.read(new TernaryAddress(operand.address, 9));
+                    if (isWrite) {
+                        return new TernaryAddress(indirectAddr.toDecimal(), 9);
+                    } else {
+                        return this.memory.read(new TernaryAddress(indirectAddr.toDecimal(), 9));
+                    }
+                    
+                case 'register_indirect':
+                    const regValue = this.registers.get(operand.register.toLowerCase());
+                    const regAddr = new TernaryAddress(regValue.toDecimal(), 9);
+                    if (isWrite) {
+                        return regAddr;
+                    } else {
+                        return this.memory.read(regAddr);
+                    }
+                    
+                case 'indexed':
+                    const baseAddr = operand.address;
+                    const indexReg = operand.index.toLowerCase();
+                    const indexValue = this.registers.get(indexReg === 'x' ? 'ix' : indexReg);
+                    const effectiveAddr = new TernaryAddress(baseAddr + indexValue.toDecimal(), 9);
+                    if (isWrite) {
+                        return effectiveAddr;
+                    } else {
+                        return this.memory.read(effectiveAddr);
+                    }
+                    
+                case 'based_indexed':
+                    const baseReg = this.registers.get(operand.base.toLowerCase());
+                    const indexReg2 = this.registers.get(operand.index.toLowerCase());
+                    const finalAddr = new TernaryAddress(
+                        operand.offset + baseReg.toDecimal() + indexReg2.toDecimal(), 
+                        9
+                    );
+                    if (isWrite) {
+                        return finalAddr;
+                    } else {
+                        return this.memory.read(finalAddr);
+                    }
+                    
+                default:
+                    throw new Error(`Unknown addressing mode: ${operand.mode}`);
+            }
+        }
+        
+        // Fallback for legacy operands
+        if (isWrite && typeof operand !== 'number') {
+            return operand; // Already a TernaryAddress
+        } else if (!isWrite && typeof operand !== 'number') {
+            return this.memory.read(operand);
+        }
+        
+        return operand;
+    }
+
     // Instruction implementations
     loadAccumulator(operand) {
-        // For immediate addressing, use the operand directly
-        // For direct addressing, read from memory
-        if (typeof operand === 'number') {
-            // Immediate value
-            this.registers.set('acc', new Tryte(operand));
+        // Handle immediate addressing separately
+        if (typeof operand === 'number' || 
+            (typeof operand === 'object' && operand.mode === 'immediate')) {
+            const value = typeof operand === 'number' ? operand : operand.value;
+            this.registers.set('acc', new Tryte(value));
         } else {
-            // Memory address
-            const value = this.memory.read(operand);
-            this.registers.set('acc', value);
+            // Use resolver for other addressing modes
+            const value = this.resolveOperand(operand, false);
+            this.registers.set('acc', value instanceof Tryte ? value : new Tryte(value));
         }
     }
 
     storeAccumulator(operand) {
-        if (typeof operand === 'number') {
-            // Store at the address specified by operand
-            this.memory.write(new TernaryAddress(operand, 9), this.registers.get('acc'));
-        } else {
-            this.memory.write(operand, this.registers.get('acc'));
-        }
+        const address = this.resolveOperand(operand, true);
+        const addr = address instanceof TernaryAddress ? address : new TernaryAddress(address, 9);
+        this.memory.write(addr, this.registers.get('acc'));
     }
 
     loadIndex(operand) {
@@ -1822,6 +1893,139 @@ class TernaryCPU {
     setMaskLevel(operand) {
         // Set interrupt mask level
         this.interruptController.setMaskLevel(operand);
+    }
+
+    systemCall(operand) {
+        // System call implementation
+        // The operand specifies the system call number
+        // ACC register contains additional parameters if needed
+        const systemCallNumber = operand || this.registers.get('acc').toDecimal();
+        
+        // Save current state on stack before kernel call
+        this.pushStack(this.registers.get('acc'));
+        this.pushStack(this.registers.get('ix'));
+        this.pushStack(this.registers.get('ix1'));
+        
+        // Set protection level to kernel mode
+        const oldProtectionLevel = this.mmu.currentProtectionLevel;
+        this.mmu.setProtectionLevel(0); // Kernel mode
+        
+        // Handle system call based on number
+        this.handleSystemCall(systemCallNumber);
+        
+        // Restore protection level
+        this.mmu.setProtectionLevel(oldProtectionLevel);
+        
+        // Restore registers (caller should clean stack if needed)
+    }
+
+    handleSystemCall(callNumber) {
+        // System call handlers
+        switch (callNumber) {
+            case 0: // Exit program
+                this.halted = true;
+                this.running = false;
+                break;
+                
+            case 1: // Write character to console
+                const char = this.registers.get('ix').toDecimal();
+                if (typeof window !== 'undefined' && window.simulator) {
+                    window.simulator.outputToConsole(String.fromCharCode(char));
+                }
+                break;
+                
+            case 2: // Read character from console (not implemented yet)
+                this.registers.set('acc', new Tryte(0));
+                break;
+                
+            case 3: // File open (using virtual disk)
+                this.handleFileOpen();
+                break;
+                
+            case 4: // File read
+                this.handleFileRead();
+                break;
+                
+            case 5: // File write  
+                this.handleFileWrite();
+                break;
+                
+            case 6: // File close
+                this.handleFileClose();
+                break;
+                
+            case 7: // Memory allocation (simple bump allocator)
+                this.handleMemoryAllocation();
+                break;
+                
+            case 8: // Memory deallocation (no-op for now)
+                break;
+                
+            case 9: // Get current time/cycle count
+                this.registers.set('acc', new Tryte(this.cycleCount % 364));
+                break;
+                
+            default:
+                // Unknown system call - set error flag
+                this.registers.set('acc', new Tryte(-1));
+                break;
+        }
+    }
+
+    handleFileOpen() {
+        // File name stored at address in IX register
+        // File mode in IX1 register (0=read, 1=write, 2=append)
+        const nameAddr = this.registers.get('ix').toDecimal();
+        const mode = this.registers.get('ix1').toDecimal();
+        
+        // For now, return a simple file handle
+        this.registers.set('acc', new Tryte(1)); // File handle 1
+    }
+
+    handleFileRead() {
+        // File handle in ACC, buffer address in IX, count in IX1
+        const handle = this.registers.get('acc').toDecimal();
+        const bufferAddr = this.registers.get('ix').toDecimal();
+        const count = this.registers.get('ix1').toDecimal();
+        
+        // Simplified: read zeros for now
+        for (let i = 0; i < count && i < 10; i++) {
+            this.memory.write(new TernaryAddress(bufferAddr + i, 9), new Tryte(0));
+        }
+        this.registers.set('acc', new Tryte(count)); // Return bytes read
+    }
+
+    handleFileWrite() {
+        // File handle in ACC, buffer address in IX, count in IX1
+        const handle = this.registers.get('acc').toDecimal();
+        const bufferAddr = this.registers.get('ix').toDecimal();
+        const count = this.registers.get('ix1').toDecimal();
+        
+        // For now, just return success
+        this.registers.set('acc', new Tryte(count)); // Return bytes written
+    }
+
+    handleFileClose() {
+        // File handle in ACC
+        const handle = this.registers.get('acc').toDecimal();
+        // Always return success for now
+        this.registers.set('acc', new Tryte(0));
+    }
+
+    handleMemoryAllocation() {
+        // Size requested in ACC register
+        const size = this.registers.get('acc').toDecimal();
+        
+        // Simple bump allocator - use high memory area
+        if (!this.heapPointer) {
+            this.heapPointer = 10000; // Start heap at address 10000
+        }
+        
+        const allocatedAddr = this.heapPointer;
+        this.heapPointer += size;
+        
+        // Return allocated address in ACC
+        this.registers.set('acc', new Tryte(allocatedAddr % 364)); // Mod to fit in tryte
     }
 
     // Memory Management Unit Operations

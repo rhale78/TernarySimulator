@@ -534,6 +534,183 @@ class DMAController {
     hasErrorDMA() {
         return Array.from(this.channels.values()).some(ch => ch.error);
     }
+    
+    // Enhanced DMA: High-level disk operations
+    disk_read_dma(diskController, sector, count, memoryAddress, channelId = 0) {
+        const channel = this.channels.get(channelId);
+        if (!channel) {
+            throw new Error(`Invalid DMA channel: ${channelId}`);
+        }
+        
+        // Configure channel for disk read
+        channel.configure({
+            sourceAddress: sector * 512, // Assuming 512 bytes per sector
+            destinationAddress: memoryAddress,
+            transferSize: count * 512,
+            direction: 'io_to_memory',
+            transferMode: 'block',
+            priority: 1 // High priority for disk operations
+        });
+        
+        // Set up disk-specific transfer data
+        channel.diskOperation = {
+            type: 'read',
+            controller: diskController,
+            sector: sector,
+            sectorCount: count
+        };
+        
+        return channel.start();
+    }
+    
+    disk_write_dma(diskController, sector, count, memoryAddress, channelId = 1) {
+        const channel = this.channels.get(channelId);
+        if (!channel) {
+            throw new Error(`Invalid DMA channel: ${channelId}`);
+        }
+        
+        // Configure channel for disk write
+        channel.configure({
+            sourceAddress: memoryAddress,
+            destinationAddress: sector * 512,
+            transferSize: count * 512,
+            direction: 'memory_to_io',
+            transferMode: 'block',
+            priority: 1 // High priority for disk operations
+        });
+        
+        // Set up disk-specific transfer data
+        channel.diskOperation = {
+            type: 'write',
+            controller: diskController,
+            sector: sector,
+            sectorCount: count
+        };
+        
+        return channel.start();
+    }
+    
+    // Enhanced DMA: Network packet transfer
+    network_send_dma(networkController, packetAddress, packetSize, channelId = 2) {
+        const channel = this.channels.get(channelId);
+        if (!channel) {
+            throw new Error(`Invalid DMA channel: ${channelId}`);
+        }
+        
+        channel.configure({
+            sourceAddress: packetAddress,
+            destinationAddress: 0, // Network controller buffer
+            transferSize: packetSize,
+            direction: 'memory_to_io',
+            transferMode: 'demand',
+            priority: 2
+        });
+        
+        channel.networkOperation = {
+            type: 'send',
+            controller: networkController,
+            packetSize: packetSize
+        };
+        
+        return channel.start();
+    }
+    
+    network_receive_dma(networkController, bufferAddress, maxSize, channelId = 3) {
+        const channel = this.channels.get(channelId);
+        if (!channel) {
+            throw new Error(`Invalid DMA channel: ${channelId}`);
+        }
+        
+        channel.configure({
+            sourceAddress: 0, // Network controller buffer
+            destinationAddress: bufferAddress,
+            transferSize: maxSize,
+            direction: 'io_to_memory',
+            transferMode: 'demand',
+            priority: 2
+        });
+        
+        channel.networkOperation = {
+            type: 'receive',
+            controller: networkController,
+            maxSize: maxSize
+        };
+        
+        return channel.start();
+    }
+    
+    // Enhanced DMA: Memory-to-memory transfers
+    memory_copy_dma(sourceAddress, destAddress, size, channelId = 4) {
+        const channel = this.channels.get(channelId);
+        if (!channel) {
+            throw new Error(`Invalid DMA channel: ${channelId}`);
+        }
+        
+        channel.configure({
+            sourceAddress: sourceAddress,
+            destinationAddress: destAddress,
+            transferSize: size,
+            direction: 'memory_to_memory', // Special mode
+            transferMode: 'block',
+            priority: 3
+        });
+        
+        return channel.start();
+    }
+    
+    // Enhanced DMA: Pattern fill
+    memory_fill_dma(address, pattern, size, channelId = 5) {
+        const channel = this.channels.get(channelId);
+        if (!channel) {
+            throw new Error(`Invalid DMA channel: ${channelId}`);
+        }
+        
+        channel.configure({
+            sourceAddress: 0, // Pattern register
+            destinationAddress: address,
+            transferSize: size,
+            direction: 'pattern_fill', // Special mode
+            transferMode: 'block',
+            priority: 4
+        });
+        
+        channel.fillPattern = pattern;
+        return channel.start();
+    }
+    
+    // Enhanced DMA: Get comprehensive statistics
+    getDMAStatistics() {
+        const stats = this.getStats();
+        
+        // Add per-channel detailed statistics
+        stats.channels = [];
+        for (const channel of this.channels.values()) {
+            const channelStats = {
+                id: channel.channelId,
+                status: channel.getStatus(),
+                statistics: {
+                    transfersCompleted: channel.transfersCompleted,
+                    bytesTransferred: channel.bytesTransferred,
+                    errorCount: channel.errorCount,
+                    averageTransferSize: channel.transfersCompleted > 0 ? 
+                        (channel.bytesTransferred / channel.transfersCompleted).toFixed(1) : 0
+                }
+            };
+            
+            // Add operation-specific stats
+            if (channel.diskOperation) {
+                channelStats.diskOperation = channel.diskOperation;
+            }
+            if (channel.networkOperation) {
+                channelStats.networkOperation = channel.networkOperation;
+            }
+            
+            stats.channels.push(channelStats);
+        }
+        
+        return stats;
+    }
+}
 }
 
 // Export for use in other modules

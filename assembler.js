@@ -85,6 +85,7 @@ class TernaryAssembler {
             'MSK': 40,   // Mask interrupt
             'UMK': 41,   // Unmask interrupt
             'SML': 42,   // Set mask level
+            'SYSCALL': 76, // System call
             
             // Memory Management Unit operations
             'MPG': 43,   // Enable/disable paging
@@ -123,11 +124,13 @@ class TernaryAssembler {
 
         // Addressing modes
         this.addressingModes = {
-            IMMEDIATE: 0,    // #value
-            DIRECT: 1,       // address
-            INDIRECT: 2,     // (address)
-            INDEXED: 3,      // address,X
-            RELATIVE: 4      // +/-offset
+            IMMEDIATE: 0,         // #value
+            DIRECT: 1,            // address
+            INDIRECT: 2,          // (address)
+            INDEXED: 3,           // address,X
+            RELATIVE: 4,          // +/-offset
+            REGISTER_INDIRECT: 5, // (R1) - Load from address stored in register
+            BASED_INDEXED: 6      // 10(IX,R1) - Load from base + index + offset
         };
     }
 
@@ -625,23 +628,48 @@ class TernaryAssembler {
             return this.parseValue(operandStr.substring(1));
         }
         
-        // Indirect addressing: (address)
+        // Register Indirect: (R1), (R2), etc.
         if (operandStr.startsWith('(') && operandStr.endsWith(')')) {
-            const addr = operandStr.substring(1, operandStr.length - 1);
-            return this.parseValue(addr);
+            const inner = operandStr.substring(1, operandStr.length - 1);
+            // Check if it's a register name
+            if (this.registers.hasOwnProperty(inner.toUpperCase())) {
+                // This is register indirect - return a special marker
+                return { mode: 'register_indirect', register: inner.toUpperCase() };
+            }
+            // Otherwise it's standard indirect addressing
+            return { mode: 'indirect', address: this.parseValue(inner) };
         }
         
-        // Indexed addressing: address,X or address,IX1 or address,IX2 or address,IX3
+        // Based Indexed: 10(IX,R1), offset(base,index)
+        const basedIndexedMatch = operandStr.match(/^(\d+)\(([^,]+),([^)]+)\)$/);
+        if (basedIndexedMatch) {
+            const offset = parseInt(basedIndexedMatch[1]);
+            const base = basedIndexedMatch[2].trim().toUpperCase();
+            const index = basedIndexedMatch[3].trim().toUpperCase();
+            return { 
+                mode: 'based_indexed', 
+                offset: offset, 
+                base: base, 
+                index: index 
+            };
+        }
+        
+        // Standard Indexed addressing: address,X or address,IX1 or address,IX2 or address,IX3
         const indexPatterns = [',X', ',IX', ',IX1', ',IX2', ',IX3'];
         for (const pattern of indexPatterns) {
             if (operandStr.includes(pattern)) {
                 const addr = operandStr.substring(0, operandStr.indexOf(pattern));
-                return this.parseValue(addr);
+                const indexReg = pattern.substring(1); // Remove comma
+                return { 
+                    mode: 'indexed', 
+                    address: this.parseValue(addr), 
+                    index: indexReg 
+                };
             }
         }
         
         // Direct addressing: just the address
-        return this.parseValue(operandStr);
+        return { mode: 'direct', address: this.parseValue(operandStr) };
     }
 
     parseValue(valueStr) {

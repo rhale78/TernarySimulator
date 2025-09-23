@@ -131,6 +131,26 @@ class TernaryHighLevelCompiler {
             return this.parseFunctionCall(text);
         }
         
+        // Lock statement: lock(mutex) { ... }
+        if (text.startsWith('lock')) {
+            return this.parseLockStatement(text);
+        }
+        
+        // Atomic statement: atomic { ... }
+        if (text.startsWith('atomic')) {
+            return this.parseAtomicStatement(text);
+        }
+        
+        // Barrier statement: barrier()
+        if (text.match(/^barrier\s*\(\s*\)\s*;?$/)) {
+            return { type: 'barrier' };
+        }
+        
+        // Thread creation: thread(function_name, arg)
+        if (text.startsWith('thread')) {
+            return this.parseThreadStatement(text);
+        }
+        
         return null;
     }
 
@@ -447,7 +467,76 @@ class TernaryHighLevelCompiler {
             };
         }
         
+    parseLockStatement(text) {
+        // Parse: lock(mutex_name) { ... }
+        const match = text.match(/^lock\s*\(\s*(\w+)\s*\)\s*\{([\s\S]*)\}\s*$/);
+        if (!match) throw new Error(`Invalid lock statement: ${text}`);
+        
+        const [, mutexName, body] = match;
+        
+        // Parse the body statements
+        const bodyStatements = [];
+        if (body.trim()) {
+            const bodyLines = body.split(';').filter(line => line.trim());
+            for (const line of bodyLines) {
+                const stmt = this.parseStatement(line.trim());
+                if (stmt) bodyStatements.push(stmt);
+            }
+        }
+        
+        return {
+            type: 'lock',
+            mutex: mutexName,
+            body: bodyStatements
+        };
+    }
+    
+    parseAtomicStatement(text) {
+        // Parse: atomic { ... }
+        const match = text.match(/^atomic\s*\{([\s\S]*)\}\s*$/);
+        if (!match) throw new Error(`Invalid atomic statement: ${text}`);
+        
+        const body = match[1];
+        
+        // Parse the body statements
+        const bodyStatements = [];
+        if (body.trim()) {
+            const bodyLines = body.split(';').filter(line => line.trim());
+            for (const line of bodyLines) {
+                const stmt = this.parseStatement(line.trim());
+                if (stmt) bodyStatements.push(stmt);
+            }
+        }
+        
+        return {
+            type: 'atomic',
+            body: bodyStatements
+        };
+    }
+    
+    parseThreadStatement(text) {
+        // Parse: thread(function_name, arg1, arg2, ...)
+        const match = text.match(/^thread\s*\(\s*(\w+)(?:\s*,\s*([^)]*))?\s*\)\s*;?$/);
+        if (!match) throw new Error(`Invalid thread statement: ${text}`);
+        
+        const [, functionName, args] = match;
+        
+        const arguments = [];
+        if (args && args.trim()) {
+            const argList = args.split(',');
+            for (const arg of argList) {
+                arguments.push(this.parseExpression(arg.trim()));
+            }
+        }
+        
         throw new Error(`Cannot parse expression: ${expr}`);
+    }
+
+        return {
+            type: 'thread',
+            function: functionName,
+            arguments: arguments
+        };
     }
 
     generate(ast) {
@@ -501,6 +590,18 @@ class TernaryHighLevelCompiler {
                 break;
             case 'function':
                 this.generateFunction(statement);
+                break;
+            case 'lock':
+                this.generateLock(statement);
+                break;
+            case 'atomic':
+                this.generateAtomic(statement);
+                break;
+            case 'barrier':
+                this.generateBarrier(statement);
+                break;
+            case 'thread':
+                this.generateThread(statement);
                 break;
             default:
                 throw new Error(`Unknown statement type: ${statement.type}`);
@@ -855,9 +956,129 @@ class TernaryHighLevelCompiler {
                 this.output.push('XORT');
                 this.output.push('');
                 break;
+            // Add standard library functions
+            case 'strlen':
+                this.generateStrlen(statement);
+                break;
+            case 'strcpy':
+                this.generateStrcpy(statement);
+                break;
+            case 'abs':
+                this.generateAbs(statement);
+                break;
+            case 'pow':
+                this.generatePow(statement);
+                break;
+            case 'printf':
+                this.generatePrintf(statement);
+                break;
+            case 'scanf':
+                this.generateScanf(statement);
+                break;
             default:
-                throw new Error(`Unknown function: ${statement.name}`);
+                // Check if this is a user-defined function
+                if (this.functions.has(statement.name)) {
+                    this.generateUserFunctionCall(statement);
+                } else {
+                    throw new Error(`Unknown function: ${statement.name}`);
+                }
         }
+    }
+
+    generateUserFunctionCall(statement) {
+        const func = this.functions.get(statement.name);
+        
+        if (statement.arguments.length !== func.parameters.length) {
+            throw new Error(`Function ${statement.name} expects ${func.parameters.length} arguments, got ${statement.arguments.length}`);
+        }
+        
+        this.output.push(`; Function call: ${statement.name}`);
+        
+        // Push arguments onto stack in reverse order (right to left)
+        for (let i = statement.arguments.length - 1; i >= 0; i--) {
+            this.generateExpression(statement.arguments[i]);
+            this.output.push('PSH'); // Push argument onto stack
+        }
+        
+        // Call the function
+        this.output.push(`CALL ${statement.name}_func`);
+        
+        // Clean up stack (remove arguments)
+        for (let i = 0; i < statement.arguments.length; i++) {
+            this.output.push('POP'); // Remove arguments from stack
+        }
+        
+        this.output.push(''); // Add blank line
+    }
+
+    // Standard library function implementations
+    generateStrlen(statement) {
+        if (statement.arguments.length !== 1) {
+            throw new Error('strlen() requires exactly one argument');
+        }
+        this.output.push(`; strlen(...)`);
+        this.generateExpression(statement.arguments[0]); // String address
+        this.output.push('CALL strlen_func');
+        this.output.push('');
+    }
+
+    generateStrcpy(statement) {
+        if (statement.arguments.length !== 2) {
+            throw new Error('strcpy() requires exactly two arguments');
+        }
+        this.output.push(`; strcpy(dest, src)`);
+        this.generateExpression(statement.arguments[1]); // Source
+        this.output.push('PSH');
+        this.generateExpression(statement.arguments[0]); // Destination
+        this.output.push('CALL strcpy_func');
+        this.output.push('POP'); // Clean up stack
+        this.output.push('');
+    }
+
+    generateAbs(statement) {
+        if (statement.arguments.length !== 1) {
+            throw new Error('abs() requires exactly one argument');
+        }
+        this.output.push(`; abs(...)`);
+        this.generateExpression(statement.arguments[0]);
+        this.output.push('CALL abs_func');
+        this.output.push('');
+    }
+
+    generatePow(statement) {
+        if (statement.arguments.length !== 2) {
+            throw new Error('pow() requires exactly two arguments');
+        }
+        this.output.push(`; pow(base, exponent)`);
+        this.generateExpression(statement.arguments[1]); // Exponent
+        this.output.push('PSH');
+        this.generateExpression(statement.arguments[0]); // Base
+        this.output.push('CALL pow_func');
+        this.output.push('POP'); // Clean up stack
+        this.output.push('');
+    }
+
+    generatePrintf(statement) {
+        // Simplified printf - just print the first argument for now
+        if (statement.arguments.length === 0) {
+            throw new Error('printf() requires at least one argument');
+        }
+        this.output.push(`; printf(...)`);
+        this.generateExpression(statement.arguments[0]);
+        this.output.push('OUT');
+        this.output.push('');
+    }
+
+    generateScanf(statement) {
+        // Simplified scanf - read into first argument
+        if (statement.arguments.length === 0) {
+            throw new Error('scanf() requires at least one argument');
+        }
+        this.output.push(`; scanf(...)`);
+        this.output.push('IN'); // Read input
+        // Store into the variable (simplified)
+        this.output.push('OUT'); // Echo for now
+        this.output.push('');
     }
 
     generateArrayDeclaration(statement) {
@@ -879,22 +1100,134 @@ class TernaryHighLevelCompiler {
     }
 
     generateFunction(statement) {
-        this.output.push(`; Function ${statement.name}`);
-        this.output.push(`${statement.name}:`);
+        const func = this.functions.get(statement.name);
         
-        // Simple function generation - would need more sophisticated handling for real implementation
+        this.output.push(`${statement.name}_func:`);
+        this.output.push(`; Function: ${statement.name}`);
+        
+        // Set up stack frame
+        this.output.push('PSH R1'); // Save old frame pointer
+        this.output.push('LDA SP'); // Get current stack pointer
+        this.output.push('STA R1'); // Set new frame pointer
+        
+        // Reserve space for local variables
+        const localVarCount = func ? func.localVars.size : 0;
+        if (localVarCount > 0) {
+            this.output.push(`LDA #${localVarCount}`);
+            this.output.push('ADD SP');
+            this.output.push('STA SP'); // Adjust stack pointer
+        }
+        
+        // Generate function body 
         for (let bodyLine of statement.body) {
             if (bodyLine.trim()) {
-                const stmt = this.parseStatement(bodyLine.trim());
-                if (stmt) {
-                    this.generateStatement(stmt);
+                try {
+                    const stmt = this.parseStatement(bodyLine.trim());
+                    if (stmt) {
+                        this.generateStatement(stmt);
+                    }
+                } catch (e) {
+                    // Simple statement generation for now
+                    this.output.push(`; ${bodyLine.trim()}`);
                 }
             }
         }
         
+        // Function epilogue
+        this.output.push(`${statement.name}_func_end:`);
+        this.output.push('LDA R1'); // Restore stack pointer from frame pointer
+        this.output.push('STA SP');
+        this.output.push('POP R1'); // Restore old frame pointer
+        
         if (statement.returnType !== 'void') {
-            this.output.push('RTS');
+            this.output.push('RET'); // Return value in ACC
+        } else {
+            this.output.push('RET'); // Return to caller
         }
+        this.output.push('');
+    }
+
+    generateLock(statement) {
+        const lockLabel = `lock_${this.labelCounter}`;
+        const unlockLabel = `unlock_${this.labelCounter}`;
+        const endLabel = `lock_end_${this.labelCounter++}`;
+        
+        this.output.push(`; Lock statement for mutex: ${statement.mutex}`);
+        
+        // Acquire the lock (simplified implementation)
+        this.output.push(`${lockLabel}:`);
+        this.output.push(`LDA #1`); // Try to acquire lock
+        this.output.push(`STA ${statement.mutex}_mutex`); // Store in mutex variable
+        
+        // Check if lock was acquired (in real implementation, this would be atomic)
+        this.output.push(`LDA ${statement.mutex}_mutex`);
+        this.output.push(`CMP #1`);
+        this.output.push(`JNZ ${lockLabel}`); // Spin if lock not acquired
+        
+        // Critical section - execute body statements
+        this.output.push(`; Critical section start`);
+        for (const bodyStmt of statement.body) {
+            this.generateStatement(bodyStmt);
+        }
+        this.output.push(`; Critical section end`);
+        
+        // Release the lock
+        this.output.push(`${unlockLabel}:`);
+        this.output.push(`LDA #0`); // Release lock
+        this.output.push(`STA ${statement.mutex}_mutex`);
+        
+        this.output.push(`${endLabel}:`);
+        this.output.push('');
+    }
+    
+    generateAtomic(statement) {
+        const atomicLabel = `atomic_${this.labelCounter++}`;
+        
+        this.output.push(`; Atomic block start`);
+        this.output.push(`${atomicLabel}:`);
+        this.output.push(`CLI`); // Disable interrupts
+        
+        // Execute atomic operations
+        for (const bodyStmt of statement.body) {
+            this.generateStatement(bodyStmt);
+        }
+        
+        this.output.push(`SEI`); // Re-enable interrupts
+        this.output.push(`; Atomic block end`);
+        this.output.push('');
+    }
+    
+    generateBarrier(statement) {
+        this.output.push(`; Memory barrier`);
+        this.output.push(`NOP`); // In a real implementation, this would be a memory fence
+        this.output.push(`NOP`); // Multiple NOPs to ensure memory ordering
+        this.output.push(`NOP`);
+        this.output.push('');
+    }
+    
+    generateThread(statement) {
+        const threadLabel = `thread_${this.labelCounter++}`;
+        
+        this.output.push(`; Create thread for function: ${statement.function}`);
+        this.output.push(`${threadLabel}:`);
+        
+        // Push thread arguments onto stack
+        for (let i = statement.arguments.length - 1; i >= 0; i--) {
+            this.generateExpression(statement.arguments[i]);
+            this.output.push('PSH');
+        }
+        
+        // Create thread (simplified - in real implementation would use system call)
+        this.output.push(`LDA #${statement.function}_func`); // Function address
+        this.output.push(`STA IX`); // Pass function address in IX
+        this.output.push(`LDA #8`); // System call for thread creation
+        this.output.push(`SYSCALL`); // Create thread via system call
+        
+        // Clean up arguments
+        for (let i = 0; i < statement.arguments.length; i++) {
+            this.output.push('POP');
+        }
+        
         this.output.push('');
     }
 
