@@ -19,24 +19,28 @@ class TernaryAssembler {
         this.constants = new Map();
         this.currentAddress = 0;
         
-        // Instruction opcodes (matches CPU instruction set)
+        // Instruction opcodes (optimized for 3-trit range -13 to +13)
         this.opcodes = {
             'NOP': 0,
+            // Core data movement
             'LDA': 1, 'STA': 2, 'LDX': 3, 'STX': 4, 'MOV': 5,
-            'ADD': 10, 'SUB': 11, 'MUL': 12, 'INC': 13, 'DEC': 14,
-            'AND': 20, 'OR': 21, 'NOT': 22, 'SHL': 23, 'SHR': 24,
-            'CMP': 30, 'JMP': 31, 'JZ': 32, 'JP': 33, 'JN': 34, 'JSR': 35, 'RTS': 36,
-            'PSH': 40, 'POP': 41,
-            'IN': 50, 'OUT': 51,
-            'CLKR': 60, 'CLKS': 61, 'WAIT': 62,  // New timer/clock instructions
-            'TEDG': 63, 'BEDG': 64,              // Edge detection instructions
-            'TCRT': 65, 'TDEL': 66, 'TSET': 67, 'TSTA': 68, 'TSTP': 69, 'TSTS': 70,  // Hardware timer management
-            'HLT': -13  // Fits in 3 trits
+            // Core arithmetic 
+            'ADD': 6, 'SUB': 7, 'MUL': 8, 'INC': 9, 'DEC': 10,
+            // Core logical
+            'AND': 11, 'OR': 12, 'NOT': 13,
+            // Control flow
+            'CMP': -1, 'JMP': -2, 'JZ': -3, 'JP': -4, 'JN': -5, 
+            'JSR': -6, 'RTS': -7,
+            // Stack and I/O
+            'PSH': -8, 'POP': -9, 'IN': -10, 'OUT': -11,
+            // Essential new instructions  
+            'LDX1': -12, // Load index register 1
+            'HLT': -13   // Halt instruction
         };
 
         // Register names
         this.registers = {
-            'ACC': 0, 'IX': 1, 'PC': 2, 'SP': 3, 'FLAGS': 4,
+            'ACC': 0, 'IX': 1, 'IX1': 14, 'IX2': 15, 'IX3': 16, 'PC': 2, 'SP': 3, 'FLAGS': 4,
             'R1': 5, 'R2': 6, 'R3': 7, 'R4': 8, 'R5': 9, 'R6': 10, 'R7': 11, 'R8': 12, 'R9': 13
         };
 
@@ -306,10 +310,13 @@ class TernaryAssembler {
             return this.parseValue(addr);
         }
         
-        // Indexed addressing: address,X
-        if (operandStr.includes(',X')) {
-            const addr = operandStr.substring(0, operandStr.indexOf(',X'));
-            return this.parseValue(addr);
+        // Indexed addressing: address,X or address,IX1 or address,IX2 or address,IX3
+        const indexPatterns = [',X', ',IX', ',IX1', ',IX2', ',IX3'];
+        for (const pattern of indexPatterns) {
+            if (operandStr.includes(pattern)) {
+                const addr = operandStr.substring(0, operandStr.indexOf(pattern));
+                return this.parseValue(addr);
+            }
         }
         
         // Direct addressing: just the address

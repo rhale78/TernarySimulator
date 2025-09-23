@@ -81,6 +81,18 @@
                                 <span id="regIX" class="reg-value">000000</span>
                             </div>
                             <div class="register">
+                                <label>IX1:</label>
+                                <span id="regIX1" class="reg-value">000000</span>
+                            </div>
+                            <div class="register">
+                                <label>IX2:</label>
+                                <span id="regIX2" class="reg-value">000000</span>
+                            </div>
+                            <div class="register">
+                                <label>IX3:</label>
+                                <span id="regIX3" class="reg-value">000000</span>
+                            </div>
+                            <div class="register">
                                 <label>SP (Stack Pointer):</label>
                                 <span id="regSP" class="reg-value">000000000</span>
                             </div>
@@ -183,6 +195,35 @@
                 <div>Execution State: <span id="executionState">Stopped</span></div>
                 <div>Cycle Count: <span id="cycleCount">0</span></div>
             </div>
+            
+            <h3>System Status</h3>
+            <div class="system-status">
+                <div class="interrupt-section">
+                    <h4>Interrupt System</h4>
+                    <div class="interrupt-info">
+                        <div>Interrupts Enabled: <span id="interruptsEnabled">true</span></div>
+                        <div>In Interrupt Handler: <span id="inInterruptHandler">false</span></div>
+                        <div>Pending Interrupts: <span id="pendingInterrupts">none</span></div>
+                        <div>System Clock: <span id="systemClock">0</span></div>
+                    </div>
+                </div>
+                
+                <div class="timer-section">
+                    <h4>Hardware Timers</h4>
+                    <div id="timerInfo" class="timer-info">
+                        <div>No hardware timers active</div>
+                    </div>
+                </div>
+                
+                <div class="clock-section">
+                    <h4>Clock Frequencies</h4>
+                    <div class="clock-info">
+                        <div>Ternary Clock: <span id="ternaryClockFreq">100 Hz</span></div>
+                        <div>Binary Clock: <span id="binaryClockFreq">100 Hz</span></div>
+                        <div>CPU Clock: <span id="cpuClockFreq">50 Hz</span></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     
@@ -190,6 +231,7 @@
     <script src="ternary_gates.js"></script>
     <script src="clocks.js"></script>
     <script src="microcode.js"></script>
+    <script src="interrupts.js"></script>
     <script src="ternary.js"></script>
     <script src="cpu.js"></script>
     <script src="memory.js"></script>
