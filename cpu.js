@@ -508,6 +508,15 @@ class TernaryCPU {
             'FCMP': { opcode: 34, execute: this.floatCompare.bind(this) },       // Float compare
             'FMOD': { opcode: 35, execute: this.floatMode.bind(this) },          // Set FPU mode (ternary/binary)
             
+            // Enhanced interrupt operations
+            'SEI': { opcode: 36, execute: this.setInterruptFlag.bind(this) },    // Set interrupt flag (enable)
+            'CLI': { opcode: 37, execute: this.clearInterruptFlag.bind(this) },  // Clear interrupt flag (disable)
+            'RTI': { opcode: 38, execute: this.returnFromInterrupt.bind(this) }, // Return from interrupt
+            'SWI': { opcode: 39, execute: this.softwareInterrupt.bind(this) },   // Software interrupt
+            'MSK': { opcode: 40, execute: this.maskInterrupt.bind(this) },       // Mask interrupt
+            'UMK': { opcode: 41, execute: this.unmaskInterrupt.bind(this) },     // Unmask interrupt
+            'SML': { opcode: 42, execute: this.setMaskLevel.bind(this) },        // Set mask level
+            
             'NOP': { opcode: 0,  execute: this.noOperation.bind(this) },         // No operation
             'HLT': { opcode: -13, execute: this.halt.bind(this) }                // Halt
         };
@@ -1468,6 +1477,42 @@ class TernaryCPU {
     floatMode(operand) {
         // Switch FPU mode between ternary (0) and binary (1)
         this.fpu.setMode(operand === 0 ? 'ternary' : 'binary');
+    }
+
+    // Enhanced Interrupt Operations
+    setInterruptFlag(operand) {
+        // Enable interrupts
+        this.interruptController.interruptEnabled = true;
+    }
+
+    clearInterruptFlag(operand) {
+        // Disable interrupts
+        this.interruptController.disableInterrupts();
+    }
+
+    returnFromInterrupt(operand) {
+        // Return from interrupt handler
+        this.interruptController.returnFromInterrupt();
+    }
+
+    softwareInterrupt(operand) {
+        // Trigger software interrupt
+        this.interruptController.triggerSoftwareInterrupt(operand);
+    }
+
+    maskInterrupt(operand) {
+        // Mask specific interrupt number
+        this.interruptController.maskInterrupt(operand);
+    }
+
+    unmaskInterrupt(operand) {
+        // Unmask specific interrupt number
+        this.interruptController.unmaskInterrupt(operand);
+    }
+
+    setMaskLevel(operand) {
+        // Set interrupt mask level
+        this.interruptController.setMaskLevel(operand);
     }
 
     // CPU execution control

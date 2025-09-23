@@ -93,15 +93,42 @@ class InterruptController {
             [3, 3],   // Invalid instruction
             [4, 4],   // Stack overflow
             [5, 5],   // Stack underflow
-            [6, 10],  // Hardware timer 0
-            [7, 11],  // Hardware timer 1
-            [8, 12],  // Hardware timer 2
-            [9, 20],  // Console input
-            [10, 21], // Console output
-            [11, 30], // System clock tick
-            [12, 40], // User interrupt 0
-            [13, 41]  // User interrupt 1
+            [6, 6],   // FPU exception
+            [7, 7],   // Memory protection violation
+            [8, 8],   // Privilege violation
+            [9, 9],   // Page fault
+            [10, 10], // Hardware timer 0 (high priority)
+            [11, 11], // Hardware timer 1
+            [12, 12], // Hardware timer 2
+            [13, 13], // Hardware timer 3
+            [14, 14], // DMA channel 0 complete
+            [15, 15], // DMA channel 1 complete
+            [16, 20], // Console input
+            [17, 21], // Console output
+            [18, 22], // Graphics interrupt
+            [19, 23], // Audio interrupt
+            [20, 24], // Network interface
+            [21, 25], // Storage controller
+            [22, 26], // External device 0
+            [23, 27], // External device 1
+            [24, 28], // External device 2
+            [25, 29], // External device 3
+            [26, 30], // System clock tick
+            [27, 35], // Software interrupt 0
+            [28, 36], // Software interrupt 1
+            [29, 37], // Software interrupt 2
+            [30, 40], // User interrupt 0
+            [31, 41]  // User interrupt 1
         ]);
+        
+        // Interrupt nesting support
+        this.maxNestingLevel = 8;
+        this.currentNestingLevel = 0;
+        this.nestedHandlers = [];
+        
+        // Interrupt masking by priority level
+        this.maskLevel = 0; // Interrupts with priority >= maskLevel are masked
+        this.globalMask = new Set(); // Specific interrupts that are globally masked
     }
 
     // Request an interrupt
@@ -146,7 +173,12 @@ class InterruptController {
 
         for (const interrupt of this.pendingInterrupts) {
             // Skip masked interrupts unless they're non-maskable
-            if (this.maskedInterrupts.has(interrupt) && interrupt > 1) {
+            if (this.isInterruptMasked(interrupt) && interrupt > 1) {
+                continue;
+            }
+            
+            // Check nesting level - can't handle lower priority interrupts
+            if (this.inInterruptHandler && this.currentNestingLevel >= this.maxNestingLevel) {
                 continue;
             }
 
@@ -159,32 +191,75 @@ class InterruptController {
 
         return selectedInterrupt;
     }
+    
+    // Check if interrupt is masked
+    isInterruptMasked(interruptNumber) {
+        // Check global mask
+        if (this.globalMask.has(interruptNumber)) {
+            return true;
+        }
+        
+        // Check mask level
+        const priority = this.priorities.get(interruptNumber);
+        if (priority >= this.maskLevel) {
+            return true;
+        }
+        
+        // Check specific masked interrupts
+        return this.maskedInterrupts.has(interruptNumber);
+    }
 
     // Handle an interrupt
     handleInterrupt(interruptNumber) {
         // Remove from pending
         this.pendingInterrupts.delete(interruptNumber);
 
+        // Check if we can nest this interrupt
+        if (this.inInterruptHandler && this.currentNestingLevel >= this.maxNestingLevel) {
+            // Cannot nest, defer the interrupt
+            this.pendingInterrupts.add(interruptNumber);
+            return;
+        }
+
         // Save current state
         const currentPC = this.cpu.registers.get('pc');
         const currentFlags = this.cpu.registers.get('flags');
+        const currentMaskLevel = this.maskLevel;
+
+        // Create interrupt context
+        const context = {
+            interruptNumber: interruptNumber,
+            pc: currentPC.toDecimal(),
+            flags: currentFlags.toDecimal(),
+            maskLevel: currentMaskLevel,
+            timestamp: Date.now()
+        };
 
         // Push state to stack
         this.cpu.pushToStack(currentPC.toDecimal());
         this.cpu.pushToStack(currentFlags.toDecimal());
+        this.cpu.pushToStack(currentMaskLevel);
+        this.cpu.pushToStack(interruptNumber);
 
-        // Set interrupt handler flag
-        this.inInterruptHandler = true;
+        // Set up nesting
+        if (!this.inInterruptHandler) {
+            this.inInterruptHandler = true;
+            this.currentNestingLevel = 0;
+        }
+        
+        this.currentNestingLevel++;
         this.interruptStack.push(interruptNumber);
+        this.nestedHandlers.push(context);
 
-        // Disable interrupts (can be re-enabled with SEI instruction)
-        this.interruptEnabled = false;
+        // Set mask level to current interrupt priority to prevent lower priority interrupts
+        const currentPriority = this.priorities.get(interruptNumber);
+        this.maskLevel = currentPriority + 1;
 
         // Jump to interrupt handler
         const handlerAddress = this.vectorTable.getVector(interruptNumber);
         this.cpu.registers.set('pc', handlerAddress);
 
-        console.log(`Handling interrupt ${interruptNumber}, jumping to ${handlerAddress.toString()}`);
+        console.log(`Handling interrupt ${interruptNumber} (priority ${currentPriority}), nesting level ${this.currentNestingLevel}, jumping to ${handlerAddress.toString()}`);
     }
 
     // Return from interrupt
@@ -193,19 +268,28 @@ class InterruptController {
             throw new Error('RTI called outside of interrupt handler');
         }
 
-        // Pop interrupt from stack
-        this.interruptStack.pop();
-        this.inInterruptHandler = this.interruptStack.length > 0;
+        // Pop interrupt context
+        const handledInterrupt = this.interruptStack.pop();
+        const context = this.nestedHandlers.pop();
+        this.currentNestingLevel--;
 
         // Restore state from stack
+        const interruptNumber = this.cpu.popFromStack();
+        const maskLevel = this.cpu.popFromStack();
         const flags = this.cpu.popFromStack();
         const pc = this.cpu.popFromStack();
 
         this.cpu.registers.set('flags', new Tryte(flags));
         this.cpu.registers.set('pc', new TernaryAddress(pc, 9));
+        this.maskLevel = maskLevel;
 
-        // Re-enable interrupts
-        this.interruptEnabled = true;
+        // Update interrupt handler state
+        if (this.currentNestingLevel === 0) {
+            this.inInterruptHandler = false;
+            this.interruptEnabled = true; // Re-enable interrupts when fully exiting
+        }
+
+        console.log(`Returning from interrupt ${interruptNumber}, nesting level now ${this.currentNestingLevel}`);
     }
 
     // Enable interrupts
@@ -227,14 +311,66 @@ class InterruptController {
     unmaskInterrupt(interruptNumber) {
         this.maskedInterrupts.delete(interruptNumber);
     }
+    
+    // Set global mask level (masks all interrupts with priority >= level)
+    setMaskLevel(level) {
+        this.maskLevel = level;
+    }
+    
+    // Set global mask for specific interrupts
+    setGlobalMask(interruptSet) {
+        this.globalMask = new Set(interruptSet);
+    }
+    
+    // Clear all pending interrupts
+    clearPendingInterrupts() {
+        this.pendingInterrupts.clear();
+    }
+    
+    // Get interrupt statistics
+    getInterruptStats() {
+        const stats = {
+            totalPending: this.pendingInterrupts.size,
+            totalMasked: this.maskedInterrupts.size,
+            nestingLevel: this.currentNestingLevel,
+            maxNesting: this.maxNestingLevel,
+            handlerActive: this.inInterruptHandler,
+            interruptsEnabled: this.interruptEnabled,
+            maskLevel: this.maskLevel,
+            globalMaskCount: this.globalMask.size
+        };
+        
+        // Count by priority levels
+        stats.pendingByPriority = {};
+        for (const interrupt of this.pendingInterrupts) {
+            const priority = this.priorities.get(interrupt);
+            if (!stats.pendingByPriority[priority]) {
+                stats.pendingByPriority[priority] = 0;
+            }
+            stats.pendingByPriority[priority]++;
+        }
+        
+        return stats;
+    }
+    
+    // Trigger software interrupt
+    triggerSoftwareInterrupt(level) {
+        // Software interrupts 27-29
+        const swInterrupt = 27 + (level % 3);
+        this.requestInterrupt(swInterrupt);
+    }
 
     // Reset interrupt controller
     reset() {
         this.pendingInterrupts.clear();
         this.maskedInterrupts.clear();
+        this.globalMask.clear();
         this.interruptEnabled = true;
         this.inInterruptHandler = false;
+        this.currentNestingLevel = 0;
+        this.maskLevel = 0;
         this.interruptStack = [];
+        this.nestedHandlers = [];
     }
 
     // Get interrupt controller state
@@ -242,9 +378,15 @@ class InterruptController {
         return {
             pendingInterrupts: Array.from(this.pendingInterrupts),
             maskedInterrupts: Array.from(this.maskedInterrupts),
+            globalMask: Array.from(this.globalMask),
             interruptEnabled: this.interruptEnabled,
             inInterruptHandler: this.inInterruptHandler,
-            interruptStack: [...this.interruptStack]
+            currentNestingLevel: this.currentNestingLevel,
+            maxNestingLevel: this.maxNestingLevel,
+            maskLevel: this.maskLevel,
+            interruptStack: [...this.interruptStack],
+            nestedHandlers: [...this.nestedHandlers],
+            stats: this.getInterruptStats()
         };
     }
 }

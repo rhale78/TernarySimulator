@@ -66,7 +66,16 @@ class TernaryAssembler {
             'FMUL': 32,  // Float multiply
             'FDIV': 33,  // Float divide
             'FCMP': 34,  // Float compare
-            'FMOD': 35   // Set FPU mode (ternary/binary)
+            'FMOD': 35,  // Set FPU mode (ternary/binary)
+            
+            // Enhanced interrupt operations
+            'SEI': 36,   // Set interrupt flag (enable)
+            'CLI': 37,   // Clear interrupt flag (disable)
+            'RTI': 38,   // Return from interrupt
+            'SWI': 39,   // Software interrupt
+            'MSK': 40,   // Mask interrupt
+            'UMK': 41,   // Unmask interrupt
+            'SML': 42    // Set mask level
         };
 
         // Register names
