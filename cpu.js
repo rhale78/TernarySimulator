@@ -39,6 +39,11 @@ if (typeof module !== 'undefined' && module.exports) {
     
     const pipelineModule = require('./pipeline.js');
     global.InstructionPipeline = pipelineModule.InstructionPipeline;
+    
+    const fpuModule = require('./fpu.js');
+    global.TernaryFloat = fpuModule.TernaryFloat;
+    global.BinaryFloat = fpuModule.BinaryFloat;
+    global.FloatingPointUnit = fpuModule.FloatingPointUnit;
 }
 
 class TernaryALU {
