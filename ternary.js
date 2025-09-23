@@ -309,6 +309,58 @@ class Tryte extends BalancedTernary {
     }
 }
 
+// Double-word class - 12 trits
+class DoubleWord extends BalancedTernary {
+    constructor(value = 0) {
+        super(value);
+        this.ensureWidth(12);
+    }
+
+    ensureWidth(width) {
+        if (this.trits.length > width) {
+            this.trits = this.trits.slice(0, width);
+        } else {
+            while (this.trits.length < width) {
+                this.trits.push(0);
+            }
+        }
+    }
+
+    // Get maximum and minimum values for a double-word
+    static get MAX_VALUE() { return 265720; } // Sum of 3^11 + 3^10 + ... + 3^0
+    static get MIN_VALUE() { return -265720; }
+
+    toString(format = 'standard') {
+        return super.toString(format);
+    }
+}
+
+// Triple-word class - 18 trits
+class TripleWord extends BalancedTernary {
+    constructor(value = 0) {
+        super(value);
+        this.ensureWidth(18);
+    }
+
+    ensureWidth(width) {
+        if (this.trits.length > width) {
+            this.trits = this.trits.slice(0, width);
+        } else {
+            while (this.trits.length < width) {
+                this.trits.push(0);
+            }
+        }
+    }
+
+    // Get maximum and minimum values for a triple-word
+    static get MAX_VALUE() { return 193710244; } // Sum of 3^17 + 3^16 + ... + 3^0
+    static get MIN_VALUE() { return -193710244; }
+
+    toString(format = 'standard') {
+        return super.toString(format);
+    }
+}
+
 // Address class - 9 trits (configurable)
 class TernaryAddress extends BalancedTernary {
     constructor(value = 0, width = 9) {
@@ -385,5 +437,5 @@ const TernaryUtils = {
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { BalancedTernary, Tryte, TernaryAddress, TernaryUtils };
+    module.exports = { BalancedTernary, Tryte, DoubleWord, TripleWord, TernaryAddress, TernaryUtils };
 }

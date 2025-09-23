@@ -8,6 +8,8 @@ if (typeof module !== 'undefined' && module.exports) {
     const ternaryModule = require('./ternary.js');
     global.BalancedTernary = ternaryModule.BalancedTernary;
     global.Tryte = ternaryModule.Tryte;
+    global.DoubleWord = ternaryModule.DoubleWord;
+    global.TripleWord = ternaryModule.TripleWord;
     global.TernaryAddress = ternaryModule.TernaryAddress;
     global.TernaryUtils = ternaryModule.TernaryUtils;
     
@@ -34,6 +36,20 @@ if (typeof module !== 'undefined' && module.exports) {
     global.InterruptVectorTable = interruptsModule.InterruptVectorTable;
     global.InterruptController = interruptsModule.InterruptController;
     global.ROMChip = interruptsModule.ROMChip;
+    
+    const pipelineModule = require('./pipeline.js');
+    global.InstructionPipeline = pipelineModule.InstructionPipeline;
+    
+    const fpuModule = require('./fpu.js');
+    global.TernaryFloat = fpuModule.TernaryFloat;
+    global.BinaryFloat = fpuModule.BinaryFloat;
+    global.FloatingPointUnit = fpuModule.FloatingPointUnit;
+    
+    const mmuModule = require('./mmu.js');
+    global.MemoryManagementUnit = mmuModule.MemoryManagementUnit;
+    global.MemorySegment = mmuModule.MemorySegment;
+    global.PageTableEntry = mmuModule.PageTableEntry;
+    global.ProtectionModes = mmuModule.ProtectionModes;
 }
 
 class TernaryALU {
@@ -237,6 +253,14 @@ class TernaryRegisters {
         this.r7 = new Tryte(0);              // General purpose register 7
         this.r8 = new Tryte(0);              // General purpose register 8
         this.r9 = new Tryte(0);              // General purpose register 9
+        
+        // Word and Triple-word extended registers
+        this.accw = new DoubleWord(0);       // Word accumulator (12 trits)
+        this.acct = new TripleWord(0);       // Triple-word accumulator (18 trits)
+        this.w1 = new DoubleWord(0);         // Word register 1
+        this.w2 = new DoubleWord(0);         // Word register 2
+        this.t1 = new TripleWord(0);         // Triple-word register 1
+        this.t2 = new TripleWord(0);         // Triple-word register 2
     }
 
     // Get register by name
@@ -259,6 +283,12 @@ class TernaryRegisters {
             case 'r7': return this.r7;
             case 'r8': return this.r8;
             case 'r9': return this.r9;
+            case 'accw': return this.accw;
+            case 'acct': return this.acct;
+            case 'w1': return this.w1;
+            case 'w2': return this.w2;
+            case 't1': return this.t1;
+            case 't2': return this.t2;
             default: throw new Error(`Unknown register: ${name}`);
         }
     }
@@ -266,7 +296,9 @@ class TernaryRegisters {
     // Set register by name
     set(name, value) {
         const val = value instanceof BalancedTernary ? value : 
-                   (name === 'pc' || name === 'sp') ? new TernaryAddress(value, 9) : new Tryte(value);
+                   (name === 'pc' || name === 'sp') ? new TernaryAddress(value, 9) : 
+                   (name === 'accw' || name === 'w1' || name === 'w2') ? new DoubleWord(value) :
+                   (name === 'acct' || name === 't1' || name === 't2') ? new TripleWord(value) : new Tryte(value);
         
         switch (name.toLowerCase()) {
             case 'pc': this.pc = val; break;
@@ -286,6 +318,12 @@ class TernaryRegisters {
             case 'r7': this.r7 = val; break;
             case 'r8': this.r8 = val; break;
             case 'r9': this.r9 = val; break;
+            case 'accw': this.accw = val; break;
+            case 'acct': this.acct = val; break;
+            case 'w1': this.w1 = val; break;
+            case 'w2': this.w2 = val; break;
+            case 't1': this.t1 = val; break;
+            case 't2': this.t2 = val; break;
             default: throw new Error(`Unknown register: ${name}`);
         }
     }
@@ -309,6 +347,12 @@ class TernaryRegisters {
         this.r7 = new Tryte(0);
         this.r8 = new Tryte(0);
         this.r9 = new Tryte(0);
+        this.accw = new DoubleWord(0);
+        this.acct = new TripleWord(0);
+        this.w1 = new DoubleWord(0);
+        this.w2 = new DoubleWord(0);
+        this.t1 = new TripleWord(0);
+        this.t2 = new TripleWord(0);
     }
 
     // Get all registers as object
@@ -330,7 +374,13 @@ class TernaryRegisters {
             r6: this.r6.toString(),
             r7: this.r7.toString(),
             r8: this.r8.toString(),
-            r9: this.r9.toString()
+            r9: this.r9.toString(),
+            accw: this.accw.toString(),
+            acct: this.acct.toString(),
+            w1: this.w1.toString(),
+            w2: this.w2.toString(),
+            t1: this.t1.toString(),
+            t2: this.t2.toString()
         };
     }
 }
@@ -350,6 +400,16 @@ class TernaryCPU {
         this.clockManager = new ClockManager();
         this.microcodeEngine = null; // Will be initialized after clockManager
         this.useMicrocode = true; // Flag to enable/disable microcode execution
+        
+        // Pipeline system
+        this.pipeline = new InstructionPipeline(this);
+        this.usePipeline = false; // Flag to enable/disable pipelining
+        
+        // Floating-Point Unit
+        this.fpu = new FloatingPointUnit();
+        
+        // Memory Management Unit  
+        this.mmu = new MemoryManagementUnit(memory);
         
         // Interrupt system
         this.romChip = new ROMChip();
@@ -426,6 +486,54 @@ class TernaryCPU {
             
             // Essential new instructions
             'LDX1': { opcode: -12, execute: this.loadIndex1.bind(this) },        // Load to index register 1
+            
+            // Word operations (12-trit)
+            'LDAW': { opcode: 14, execute: this.loadAccumulatorWord.bind(this) }, // Load word to accumulator
+            'STAW': { opcode: 15, execute: this.storeAccumulatorWord.bind(this) }, // Store accumulator word
+            'ADDW': { opcode: 16, execute: this.addWord.bind(this) },            // Add word
+            'SUBW': { opcode: 17, execute: this.subtractWord.bind(this) },       // Subtract word
+            'MULW': { opcode: 18, execute: this.multiplyWord.bind(this) },       // Multiply word
+            
+            // Triple-word operations (18-trit)
+            'LDAT': { opcode: 19, execute: this.loadAccumulatorTriple.bind(this) }, // Load triple-word to accumulator
+            'STAT': { opcode: 20, execute: this.storeAccumulatorTriple.bind(this) }, // Store accumulator triple-word
+            'ADDT': { opcode: 21, execute: this.addTriple.bind(this) },          // Add triple-word
+            'SUBT': { opcode: 22, execute: this.subtractTriple.bind(this) },     // Subtract triple-word
+            'MULT': { opcode: 23, execute: this.multiplyTriple.bind(this) },     // Multiply triple-word
+            
+            // Memory block operations
+            'MOVC': { opcode: 24, execute: this.memoryCopy.bind(this) },         // Memory copy block
+            'MOVW': { opcode: 25, execute: this.moveWordBlock.bind(this) },      // Move word block
+            'MOVT': { opcode: 26, execute: this.moveTripleBlock.bind(this) },    // Move triple-word block
+            'CLRB': { opcode: 27, execute: this.clearBlock.bind(this) },         // Clear block
+            
+            // Floating-point operations
+            'FLDA': { opcode: 28, execute: this.floatLoad.bind(this) },          // Load float to FPU
+            'FSTA': { opcode: 29, execute: this.floatStore.bind(this) },         // Store float from FPU
+            'FADD': { opcode: 30, execute: this.floatAdd.bind(this) },           // Float add
+            'FSUB': { opcode: 31, execute: this.floatSubtract.bind(this) },      // Float subtract
+            'FMUL': { opcode: 32, execute: this.floatMultiply.bind(this) },      // Float multiply
+            'FDIV': { opcode: 33, execute: this.floatDivide.bind(this) },        // Float divide
+            'FCMP': { opcode: 34, execute: this.floatCompare.bind(this) },       // Float compare
+            'FMOD': { opcode: 35, execute: this.floatMode.bind(this) },          // Set FPU mode (ternary/binary)
+            
+            // Enhanced interrupt operations
+            'SEI': { opcode: 36, execute: this.setInterruptFlag.bind(this) },    // Set interrupt flag (enable)
+            'CLI': { opcode: 37, execute: this.clearInterruptFlag.bind(this) },  // Clear interrupt flag (disable)
+            'RTI': { opcode: 38, execute: this.returnFromInterrupt.bind(this) }, // Return from interrupt
+            'SWI': { opcode: 39, execute: this.softwareInterrupt.bind(this) },   // Software interrupt
+            'MSK': { opcode: 40, execute: this.maskInterrupt.bind(this) },       // Mask interrupt
+            'UMK': { opcode: 41, execute: this.unmaskInterrupt.bind(this) },     // Unmask interrupt
+            'SML': { opcode: 42, execute: this.setMaskLevel.bind(this) },        // Set mask level
+            
+            // Memory Management Unit operations
+            'MPG': { opcode: 43, execute: this.enablePaging.bind(this) },        // Enable/disable paging
+            'MPT': { opcode: 44, execute: this.setProtectionLevel.bind(this) },  // Set protection level
+            'MAP': { opcode: 45, execute: this.mapPage.bind(this) },             // Map virtual page
+            'UMP': { opcode: 46, execute: this.unmapPage.bind(this) },           // Unmap virtual page
+            'FLT': { opcode: 47, execute: this.flushTLB.bind(this) },            // Flush TLB
+            'LVA': { opcode: 48, execute: this.loadVirtualAddress.bind(this) },  // Load from virtual address
+            'SVA': { opcode: 49, execute: this.storeVirtualAddress.bind(this) }, // Store to virtual address
             
             'NOP': { opcode: 0,  execute: this.noOperation.bind(this) },         // No operation
             'HLT': { opcode: -13, execute: this.halt.bind(this) }                // Halt
@@ -924,6 +1032,567 @@ class TernaryCPU {
         return this.memory.read(newSp).toDecimal();
     }
 
+    // Word Operations (12-trit)
+    loadAccumulatorWord(operand) {
+        if (typeof operand === 'number') {
+            this.registers.set('accw', new DoubleWord(operand));
+        } else {
+            // For memory addressing, we need to read two consecutive trytes
+            const addr = new TernaryAddress(operand, 9);
+            const low = this.memory.read(addr);
+            const high = this.memory.read(addr.increment());
+            
+            // Combine the trits directly
+            const combinedTrits = [];
+            
+            // Add low trits (0-5)
+            combinedTrits.push(...low.trits.slice(0, 6));
+            
+            // Add high trits (6-11)
+            combinedTrits.push(...high.trits.slice(0, 6));
+            
+            // Create double-word from combined trits
+            const word = new DoubleWord();
+            word.trits = combinedTrits;
+            word.normalize();
+            
+            this.registers.set('accw', word);
+        }
+    }
+
+    storeAccumulatorWord(operand) {
+        const wordValue = this.registers.get('accw');
+        const addr = new TernaryAddress(operand, 9);
+        
+        // Convert the double-word to balanced ternary trits and split into chunks
+        const trits = wordValue.trits.slice(); // Copy the trits
+        
+        // Pad to 12 trits if necessary
+        while (trits.length < 12) {
+            trits.push(0);
+        }
+        
+        // Split into two 6-trit chunks
+        const lowTrits = trits.slice(0, 6);
+        const highTrits = trits.slice(6, 12);
+        
+        // Create trytes from the trit chunks
+        const low = new Tryte();
+        low.trits = lowTrits;
+        low.normalize();
+        
+        const high = new Tryte();
+        high.trits = highTrits;
+        high.normalize();
+        
+        this.memory.write(addr, low);
+        this.memory.write(addr.increment(), high);
+    }
+
+    addWord(operand) {
+        const current = this.registers.get('accw');
+        if (typeof operand === 'number') {
+            const result = current.add(operand);
+            this.registers.set('accw', new DoubleWord(result.toDecimal()));
+        } else {
+            // Read word from memory
+            const addr = new TernaryAddress(operand, 9);
+            const low = this.memory.read(addr);
+            const high = this.memory.read(addr.increment());
+            const memValue = (high.toDecimal() * 729) + low.toDecimal();
+            
+            const result = current.add(memValue);
+            this.registers.set('accw', new DoubleWord(result.toDecimal()));
+        }
+        this.alu.updateFlags(this.registers.get('accw'));
+    }
+
+    subtractWord(operand) {
+        const current = this.registers.get('accw');
+        if (typeof operand === 'number') {
+            const result = current.subtract(operand);
+            this.registers.set('accw', new DoubleWord(result.toDecimal()));
+        } else {
+            // Read word from memory
+            const addr = new TernaryAddress(operand, 9);
+            const low = this.memory.read(addr);
+            const high = this.memory.read(addr.increment());
+            const memValue = (high.toDecimal() * 729) + low.toDecimal();
+            
+            const result = current.subtract(memValue);
+            this.registers.set('accw', new DoubleWord(result.toDecimal()));
+        }
+        this.alu.updateFlags(this.registers.get('accw'));
+    }
+
+    multiplyWord(operand) {
+        const current = this.registers.get('accw');
+        if (typeof operand === 'number') {
+            const result = current.multiply(operand);
+            this.registers.set('accw', new DoubleWord(result.toDecimal()));
+        } else {
+            // Read word from memory
+            const addr = new TernaryAddress(operand, 9);
+            const low = this.memory.read(addr);
+            const high = this.memory.read(addr.increment());
+            const memValue = (high.toDecimal() * 729) + low.toDecimal();
+            
+            const result = current.multiply(memValue);
+            this.registers.set('accw', new DoubleWord(result.toDecimal()));
+        }
+        this.alu.updateFlags(this.registers.get('accw'));
+    }
+
+    // Triple-Word Operations (18-trit)
+    loadAccumulatorTriple(operand) {
+        if (typeof operand === 'number') {
+            this.registers.set('acct', new TripleWord(operand));
+        } else {
+            // Read three consecutive trytes
+            const addr = new TernaryAddress(operand, 9);
+            const low = this.memory.read(addr);
+            const mid = this.memory.read(addr.increment());
+            const high = this.memory.read(addr.increment().increment());
+            
+            // Combine the trits directly rather than using decimal values
+            const combinedTrits = [];
+            
+            // Add low trits (0-5)
+            combinedTrits.push(...low.trits.slice(0, 6));
+            
+            // Add mid trits (6-11)
+            combinedTrits.push(...mid.trits.slice(0, 6));
+            
+            // Add high trits (12-17)
+            combinedTrits.push(...high.trits.slice(0, 6));
+            
+            // Create triple-word from combined trits
+            const triple = new TripleWord();
+            triple.trits = combinedTrits;
+            triple.normalize();
+            
+            this.registers.set('acct', triple);
+        }
+    }
+
+    storeAccumulatorTriple(operand) {
+        const tripleValue = this.registers.get('acct');
+        const addr = new TernaryAddress(operand, 9);
+        
+        // Convert the triple-word to balanced ternary trits and split into chunks
+        const trits = tripleValue.trits.slice(); // Copy the trits
+        
+        // Pad to 18 trits if necessary
+        while (trits.length < 18) {
+            trits.push(0);
+        }
+        
+        // Split into three 6-trit chunks
+        const lowTrits = trits.slice(0, 6);
+        const midTrits = trits.slice(6, 12);
+        const highTrits = trits.slice(12, 18);
+        
+        // Create trytes from the trit chunks
+        const low = new Tryte();
+        low.trits = lowTrits;
+        low.normalize();
+        
+        const mid = new Tryte();
+        mid.trits = midTrits;
+        mid.normalize();
+        
+        const high = new Tryte();
+        high.trits = highTrits;
+        high.normalize();
+        
+        this.memory.write(addr, low);
+        this.memory.write(addr.increment(), mid);
+        this.memory.write(addr.increment().increment(), high);
+    }
+
+    addTriple(operand) {
+        const current = this.registers.get('acct');
+        if (typeof operand === 'number') {
+            const result = current.add(operand);
+            this.registers.set('acct', new TripleWord(result.toDecimal()));
+        } else {
+            // Read triple-word from memory
+            const addr = new TernaryAddress(operand, 9);
+            const low = this.memory.read(addr);
+            const mid = this.memory.read(addr.increment());
+            const high = this.memory.read(addr.increment().increment());
+            
+            let memValue = low.toDecimal();
+            memValue += mid.toDecimal() * 729;
+            memValue += high.toDecimal() * 729 * 729;
+            
+            const result = current.add(memValue);
+            this.registers.set('acct', new TripleWord(result.toDecimal()));
+        }
+        this.alu.updateFlags(this.registers.get('acct'));
+    }
+
+    subtractTriple(operand) {
+        const current = this.registers.get('acct');
+        if (typeof operand === 'number') {
+            const result = current.subtract(operand);
+            this.registers.set('acct', new TripleWord(result.toDecimal()));
+        } else {
+            // Read triple-word from memory
+            const addr = new TernaryAddress(operand, 9);
+            const low = this.memory.read(addr);
+            const mid = this.memory.read(addr.increment());
+            const high = this.memory.read(addr.increment().increment());
+            
+            let memValue = low.toDecimal();
+            memValue += mid.toDecimal() * 729;
+            memValue += high.toDecimal() * 729 * 729;
+            
+            const result = current.subtract(memValue);
+            this.registers.set('acct', new TripleWord(result.toDecimal()));
+        }
+        this.alu.updateFlags(this.registers.get('acct'));
+    }
+
+    multiplyTriple(operand) {
+        const current = this.registers.get('acct');
+        if (typeof operand === 'number') {
+            const result = current.multiply(operand);
+            this.registers.set('acct', new TripleWord(result.toDecimal()));
+        } else {
+            // Read triple-word from memory
+            const addr = new TernaryAddress(operand, 9);
+            const low = this.memory.read(addr);
+            const mid = this.memory.read(addr.increment());
+            const high = this.memory.read(addr.increment().increment());
+            
+            let memValue = low.toDecimal();
+            memValue += mid.toDecimal() * 729;
+            memValue += high.toDecimal() * 729 * 729;
+            
+            const result = current.multiply(memValue);
+            this.registers.set('acct', new TripleWord(result.toDecimal()));
+        }
+        this.alu.updateFlags(this.registers.get('acct'));
+    }
+
+    // Memory Block Operations
+    memoryCopy(operand) {
+        // Format: source_addr,dest_addr,count (operand encodes parameters)
+        // For simplicity, use IX register for source, IX1 for dest, ACC for count
+        const sourceAddr = this.registers.get('ix').toDecimal();
+        const destAddr = this.registers.get('ix1').toDecimal();
+        const count = this.registers.get('acc').toDecimal();
+        
+        for (let i = 0; i < count; i++) {
+            const src = new TernaryAddress(sourceAddr + i, 9);
+            const dst = new TernaryAddress(destAddr + i, 9);
+            const value = this.memory.read(src);
+            this.memory.write(dst, value);
+        }
+    }
+
+    moveWordBlock(operand) {
+        // Move words (2 trytes each)
+        const sourceAddr = this.registers.get('ix').toDecimal();
+        const destAddr = this.registers.get('ix1').toDecimal();
+        const wordCount = this.registers.get('acc').toDecimal();
+        
+        for (let i = 0; i < wordCount; i++) {
+            const srcBase = sourceAddr + (i * 2);
+            const dstBase = destAddr + (i * 2);
+            
+            // Copy two trytes for each word
+            for (let j = 0; j < 2; j++) {
+                const src = new TernaryAddress(srcBase + j, 9);
+                const dst = new TernaryAddress(dstBase + j, 9);
+                const value = this.memory.read(src);
+                this.memory.write(dst, value);
+            }
+        }
+    }
+
+    moveTripleBlock(operand) {
+        // Move triple-words (3 trytes each)
+        const sourceAddr = this.registers.get('ix').toDecimal();
+        const destAddr = this.registers.get('ix1').toDecimal();
+        const tripleCount = this.registers.get('acc').toDecimal();
+        
+        for (let i = 0; i < tripleCount; i++) {
+            const srcBase = sourceAddr + (i * 3);
+            const dstBase = destAddr + (i * 3);
+            
+            // Copy three trytes for each triple-word
+            for (let j = 0; j < 3; j++) {
+                const src = new TernaryAddress(srcBase + j, 9);
+                const dst = new TernaryAddress(dstBase + j, 9);
+                const value = this.memory.read(src);
+                this.memory.write(dst, value);
+            }
+        }
+    }
+
+    clearBlock(operand) {
+        // Clear memory block starting at address in IX, count in ACC
+        const startAddr = this.registers.get('ix').toDecimal();
+        const count = this.registers.get('acc').toDecimal();
+        
+        for (let i = 0; i < count; i++) {
+            const addr = new TernaryAddress(startAddr + i, 9);
+            this.memory.write(addr, new Tryte(0));
+        }
+    }
+
+    // Floating-Point Operations
+    floatLoad(operand) {
+        // Load value into FPU accumulator (FACC)
+        if (typeof operand === 'number') {
+            this.fpu.load('FACC', operand);
+        } else {
+            // Load from memory - assume standard 12-trit float format
+            const addr = new TernaryAddress(operand, 9);
+            const low = this.memory.read(addr);
+            const high = this.memory.read(addr.increment());
+            
+            // Combine two trytes into float representation
+            const combinedTrits = [];
+            combinedTrits.push(...low.trits.slice(0, 6));
+            combinedTrits.push(...high.trits.slice(0, 6));
+            
+            // Create TernaryFloat from trits
+            const float = new TernaryFloat(0, 'standard');
+            float.sign = combinedTrits[0] || 0;
+            
+            // Extract exponent (3 trits)
+            const expTrits = combinedTrits.slice(1, 4);
+            const expBT = new BalancedTernary();
+            expBT.trits = expTrits;
+            float.exponent = expBT.toDecimal() + float.exponentBias;
+            
+            // Extract mantissa (8 trits)
+            const mantTrits = combinedTrits.slice(4, 12);
+            const mantBT = new BalancedTernary();
+            mantBT.trits = mantTrits;
+            float.mantissa = mantBT.toDecimal();
+            
+            this.fpu.ternaryRegisters.FACC = float;
+        }
+    }
+
+    floatStore(operand) {
+        // Store FPU accumulator to memory
+        const float = this.fpu.ternaryRegisters.FACC;
+        const addr = new TernaryAddress(operand, 9);
+        
+        // Convert float to two trytes
+        const bt = float.toBalancedTernary();
+        const trits = bt.trits.slice();
+        
+        // Pad to 12 trits
+        while (trits.length < 12) {
+            trits.push(0);
+        }
+        
+        // Split into two 6-trit chunks
+        const lowTrits = trits.slice(0, 6);
+        const highTrits = trits.slice(6, 12);
+        
+        const low = new Tryte();
+        low.trits = lowTrits;
+        low.normalize();
+        
+        const high = new Tryte();
+        high.trits = highTrits;
+        high.normalize();
+        
+        this.memory.write(addr, low);
+        this.memory.write(addr.increment(), high);
+    }
+
+    floatAdd(operand) {
+        // Add to FPU accumulator
+        if (typeof operand === 'number') {
+            const operandFloat = new TernaryFloat(operand, 'standard');
+            this.fpu.ternaryRegisters.FACC = this.fpu.ternaryRegisters.FACC.add(operandFloat);
+        } else {
+            // Load float from memory and add
+            this.floatLoad(operand); // This loads into FACC temporarily
+            const temp = this.fpu.ternaryRegisters.FACC;
+            this.fpu.load('FACC', this.fpu.ternaryRegisters.FACC.toDecimal()); // Restore original
+            this.fpu.ternaryRegisters.FACC = this.fpu.ternaryRegisters.FACC.add(temp);
+        }
+        this.fpu.updateFlags();
+    }
+
+    floatSubtract(operand) {
+        // Subtract from FPU accumulator
+        if (typeof operand === 'number') {
+            const operandFloat = new TernaryFloat(operand, 'standard');
+            this.fpu.ternaryRegisters.FACC = this.fpu.ternaryRegisters.FACC.subtract(operandFloat);
+        } else {
+            // Similar to floatAdd but subtract
+            this.floatLoad(operand);
+            const temp = this.fpu.ternaryRegisters.FACC;
+            this.fpu.load('FACC', this.fpu.ternaryRegisters.FACC.toDecimal());
+            this.fpu.ternaryRegisters.FACC = this.fpu.ternaryRegisters.FACC.subtract(temp);
+        }
+        this.fpu.updateFlags();
+    }
+
+    floatMultiply(operand) {
+        // Multiply FPU accumulator
+        if (typeof operand === 'number') {
+            const operandFloat = new TernaryFloat(operand, 'standard');
+            this.fpu.ternaryRegisters.FACC = this.fpu.ternaryRegisters.FACC.multiply(operandFloat);
+        } else {
+            this.floatLoad(operand);
+            const temp = this.fpu.ternaryRegisters.FACC;
+            this.fpu.load('FACC', this.fpu.ternaryRegisters.FACC.toDecimal());
+            this.fpu.ternaryRegisters.FACC = this.fpu.ternaryRegisters.FACC.multiply(temp);
+        }
+        this.fpu.updateFlags();
+    }
+
+    floatDivide(operand) {
+        // Divide FPU accumulator
+        try {
+            if (typeof operand === 'number') {
+                const operandFloat = new TernaryFloat(operand, 'standard');
+                this.fpu.ternaryRegisters.FACC = this.fpu.ternaryRegisters.FACC.divide(operandFloat);
+            } else {
+                this.floatLoad(operand);
+                const temp = this.fpu.ternaryRegisters.FACC;
+                this.fpu.load('FACC', this.fpu.ternaryRegisters.FACC.toDecimal());
+                this.fpu.ternaryRegisters.FACC = this.fpu.ternaryRegisters.FACC.divide(temp);
+            }
+        } catch (error) {
+            this.fpu.flags.invalid = 1;
+        }
+        this.fpu.updateFlags();
+    }
+
+    floatCompare(operand) {
+        // Compare FPU accumulator with operand
+        let comparison;
+        if (typeof operand === 'number') {
+            const operandFloat = new TernaryFloat(operand, 'standard');
+            comparison = this.fpu.ternaryRegisters.FACC.compare(operandFloat);
+        } else {
+            // Load from memory and compare
+            const currentValue = this.fpu.ternaryRegisters.FACC.toDecimal();
+            this.floatLoad(operand);
+            const operandFloat = this.fpu.ternaryRegisters.FACC;
+            this.fpu.load('FACC', currentValue); // Restore original
+            comparison = this.fpu.ternaryRegisters.FACC.compare(operandFloat);
+        }
+        
+        // Set CPU flags based on comparison
+        this.alu.flags.zero = comparison === 0 ? 1 : 0;
+        this.alu.flags.positive = comparison > 0 ? 1 : 0;
+        this.alu.flags.negative = comparison < 0 ? 1 : 0;
+    }
+
+    floatMode(operand) {
+        // Switch FPU mode between ternary (0) and binary (1)
+        this.fpu.setMode(operand === 0 ? 'ternary' : 'binary');
+    }
+
+    // Enhanced Interrupt Operations
+    setInterruptFlag(operand) {
+        // Enable interrupts
+        this.interruptController.interruptEnabled = true;
+    }
+
+    clearInterruptFlag(operand) {
+        // Disable interrupts
+        this.interruptController.disableInterrupts();
+    }
+
+    returnFromInterrupt(operand) {
+        // Return from interrupt handler
+        this.interruptController.returnFromInterrupt();
+    }
+
+    softwareInterrupt(operand) {
+        // Trigger software interrupt
+        this.interruptController.triggerSoftwareInterrupt(operand);
+    }
+
+    maskInterrupt(operand) {
+        // Mask specific interrupt number
+        this.interruptController.maskInterrupt(operand);
+    }
+
+    unmaskInterrupt(operand) {
+        // Unmask specific interrupt number
+        this.interruptController.unmaskInterrupt(operand);
+    }
+
+    setMaskLevel(operand) {
+        // Set interrupt mask level
+        this.interruptController.setMaskLevel(operand);
+    }
+
+    // Memory Management Unit Operations
+    enablePaging(operand) {
+        // Enable/disable paging (0=disable, 1=enable)
+        this.mmu.setPagingEnabled(operand !== 0);
+    }
+
+    setProtectionLevel(operand) {
+        // Set current protection level (0=kernel, 1=supervisor, 2=user)
+        this.mmu.setProtectionLevel(operand);
+    }
+
+    mapPage(operand) {
+        // Map virtual page: IX = virtual page, IX1 = physical page, ACC = permissions
+        const virtualPage = this.registers.get('ix').toDecimal();
+        const physicalPage = this.registers.get('ix1').toDecimal();
+        const permBits = this.registers.get('acc').toDecimal();
+        
+        // Convert permission bits to string
+        let permissions = '';
+        if (permBits & 1) permissions += 'r';
+        if (permBits & 2) permissions += 'w'; 
+        if (permBits & 4) permissions += 'x';
+        
+        this.mmu.mapPage(virtualPage, physicalPage, permissions);
+    }
+
+    unmapPage(operand) {
+        // Unmap virtual page: operand = virtual page number
+        this.mmu.unmapPage(operand);
+    }
+
+    flushTLB(operand) {
+        // Flush Translation Lookaside Buffer
+        this.mmu.tlb.clear();
+    }
+
+    loadVirtualAddress(operand) {
+        // Load from virtual address to accumulator
+        try {
+            const virtualAddr = typeof operand === 'number' ? operand : this.registers.get('ix').toDecimal();
+            const value = this.mmu.readVirtual(virtualAddr);
+            this.registers.set('acc', value);
+        } catch (error) {
+            // MMU exception - trigger interrupt
+            this.interruptController.requestInterrupt(7); // Memory protection violation
+        }
+    }
+
+    storeVirtualAddress(operand) {
+        // Store accumulator to virtual address
+        try {
+            const virtualAddr = typeof operand === 'number' ? operand : this.registers.get('ix').toDecimal();
+            const value = this.registers.get('acc');
+            this.mmu.writeVirtual(virtualAddr, value);
+        } catch (error) {
+            // MMU exception - trigger interrupt
+            this.interruptController.requestInterrupt(7); // Memory protection violation
+        }
+    }
+
     // CPU execution control
     step() {
         if (this.halted) return false;
@@ -1009,13 +1678,39 @@ class TernaryCPU {
         // Start clock manager
         this.clockManager.start();
         
-        if (this.useMicrocode && this.microcodeEngine) {
+        if (this.usePipeline) {
+            // Pipeline execution mode
+            this.runPipelined();
+        } else if (this.useMicrocode && this.microcodeEngine) {
             // Microcode-driven execution
             this.runMicrocode();
         } else {
             // Legacy execution mode
             this.runLegacy();
         }
+    }
+    
+    runPipelined() {
+        // Enable pipeline
+        this.pipeline.setEnabled(true);
+        
+        // Pipeline-driven execution
+        const pipelineLoop = () => {
+            if (!this.running || this.halted) {
+                this.pipeline.setEnabled(false);
+                this.clockManager.stop();
+                return;
+            }
+            
+            // Tick the pipeline
+            this.pipeline.tick();
+            this.cycleCount++;
+            
+            // Continue execution loop
+            setTimeout(pipelineLoop, 10); // 100Hz execution speed
+        };
+        
+        pipelineLoop();
     }
     
     runMicrocode() {
@@ -1083,6 +1778,15 @@ class TernaryCPU {
         this.cycleCount = 0;
         this.currentInstruction = null;
         
+        // Reset pipeline system
+        this.pipeline.reset();
+        
+        // Reset FPU
+        this.fpu.reset();
+        
+        // Reset MMU
+        this.mmu.reset();
+        
         // Reset interrupt system
         this.interruptController.reset();
         this.interruptVectorTable.reset();
@@ -1123,7 +1827,8 @@ class TernaryCPU {
                 running: this.running,
                 cycleCount: this.cycleCount,
                 currentInstruction: this.currentInstruction ? this.currentInstruction.toString() : null,
-                useMicrocode: this.useMicrocode
+                useMicrocode: this.useMicrocode,
+                usePipeline: this.usePipeline
             }
         };
         
@@ -1137,6 +1842,21 @@ class TernaryCPU {
             baseState.microcodeStatus = this.microcodeEngine.getState();
         }
         
+        // Add pipeline status
+        if (this.pipeline) {
+            baseState.pipelineStatus = this.pipeline.getState();
+        }
+        
+        // Add FPU status
+        if (this.fpu) {
+            baseState.fpuStatus = this.fpu.getState();
+        }
+        
+        // Add MMU status
+        if (this.mmu) {
+            baseState.mmuStatus = this.mmu.getState();
+        }
+        
         return baseState;
     }
     
@@ -1148,6 +1868,22 @@ class TernaryCPU {
             this.pause();
             this.run();
         }
+    }
+    
+    // Method to enable/disable pipeline
+    setPipelineEnabled(enabled) {
+        this.usePipeline = enabled;
+        this.pipeline.setEnabled(enabled);
+        if (this.running) {
+            // If changing pipeline mode while running, restart execution
+            this.pause();
+            this.run();
+        }
+    }
+    
+    // Get pipeline statistics
+    getPipelineStats() {
+        return this.pipeline.getState().stats;
     }
 }
 

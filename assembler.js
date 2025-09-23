@@ -37,13 +37,67 @@ class TernaryAssembler {
             'PSH': -8, 'POP': -9, 'IN': -10, 'OUT': -11,
             // Essential new instructions  
             'LDX1': -12, // Load index register 1
-            'HLT': -13   // Halt instruction
+            'HLT': -13,  // Halt instruction
+            
+            // Extended word operations (using 2-trit opcodes for broader range)
+            // Note: These require special handling as they exceed 3-trit range
+            'LDAW': 14,  // Load Accumulator Word (12 trits)
+            'STAW': 15,  // Store Accumulator Word
+            'ADDW': 16,  // Add Word
+            'SUBW': 17,  // Subtract Word
+            'MULW': 18,  // Multiply Word
+            
+            // Triple-word operations  
+            'LDAT': 19,  // Load Accumulator Triple-word (18 trits)
+            'STAT': 20,  // Store Accumulator Triple-word
+            'ADDT': 21,  // Add Triple-word
+            'SUBT': 22,  // Subtract Triple-word
+            'MULT': 23,  // Multiply Triple-word
+            
+            // Memory block operations
+            'MOVC': 24,  // Memory copy block
+            'MOVW': 25,  // Move word block
+            'MOVT': 26,  // Move triple-word block
+            'CLRB': 27,  // Clear block
+            
+            // Floating-point operations
+            'FLDA': 28,  // Load float to FPU
+            'FSTA': 29,  // Store float from FPU
+            'FADD': 30,  // Float add
+            'FSUB': 31,  // Float subtract
+            'FMUL': 32,  // Float multiply
+            'FDIV': 33,  // Float divide
+            'FCMP': 34,  // Float compare
+            'FMOD': 35,  // Set FPU mode (ternary/binary)
+            
+            // Enhanced interrupt operations
+            'SEI': 36,   // Set interrupt flag (enable)
+            'CLI': 37,   // Clear interrupt flag (disable)
+            'RTI': 38,   // Return from interrupt
+            'SWI': 39,   // Software interrupt
+            'MSK': 40,   // Mask interrupt
+            'UMK': 41,   // Unmask interrupt
+            'SML': 42,   // Set mask level
+            
+            // Memory Management Unit operations
+            'MPG': 43,   // Enable/disable paging
+            'MPT': 44,   // Set protection level
+            'MAP': 45,   // Map virtual page
+            'UMP': 46,   // Unmap virtual page
+            'FLT': 47,   // Flush TLB
+            'LVA': 48,   // Load from virtual address
+            'SVA': 49    // Store to virtual address
         };
 
         // Register names
         this.registers = {
             'ACC': 0, 'IX': 1, 'IX1': 14, 'IX2': 15, 'IX3': 16, 'PC': 2, 'SP': 3, 'FLAGS': 4,
-            'R1': 5, 'R2': 6, 'R3': 7, 'R4': 8, 'R5': 9, 'R6': 10, 'R7': 11, 'R8': 12, 'R9': 13
+            'R1': 5, 'R2': 6, 'R3': 7, 'R4': 8, 'R5': 9, 'R6': 10, 'R7': 11, 'R8': 12, 'R9': 13,
+            // Extended registers
+            'ACCW': 20, 'ACCT': 21, 'W1': 22, 'W2': 23, 'T1': 24, 'T2': 25,
+            // FPU registers
+            'F0': 30, 'F1': 31, 'F2': 32, 'F3': 33, 'FE0': 34, 'FE1': 35, 'FACC': 36, 'FACCX': 37,
+            'B0': 40, 'B1': 41, 'B2': 42, 'B3': 43, 'BACC': 44
         };
 
         // Addressing modes
