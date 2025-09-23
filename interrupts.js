@@ -144,6 +144,112 @@ class InterruptController {
         // Interrupt masking by priority level
         this.maskLevel = 1000; // By default, don't mask any interrupts (use high value)
         this.globalMask = new Set(); // Specific interrupts that are globally masked
+        
+        // Enhanced PIC features
+        this.priorityGroups = new Map(); // Group interrupts by priority levels
+        this.triggerModes = new Map(); // Edge or level triggered per interrupt
+        this.autoEOI = new Map(); // Auto end-of-interrupt per interrupt
+        this.spuriousVector = 7; // Default spurious interrupt vector
+        this.initializePriorityGroups();
+    }
+    
+    // Initialize priority groups for better management
+    initializePriorityGroups() {
+        // Group interrupts by priority levels for efficient processing
+        for (const [interrupt, priority] of this.priorities) {
+            if (!this.priorityGroups.has(priority)) {
+                this.priorityGroups.set(priority, new Set());
+            }
+            this.priorityGroups.get(priority).add(interrupt);
+            
+            // Set default trigger modes and EOI behavior
+            this.triggerModes.set(interrupt, interrupt <= 1 ? 'level' : 'edge');
+            this.autoEOI.set(interrupt, interrupt > 20); // Auto-EOI for low priority interrupts
+        }
+    }
+    
+    // Enhanced PIC: Configure interrupt priority dynamically
+    setPriority(interruptNumber, newPriority) {
+        if (!this.priorities.has(interruptNumber)) {
+            throw new Error(`Invalid interrupt number: ${interruptNumber}`);
+        }
+        
+        // Remove from old priority group
+        const oldPriority = this.priorities.get(interruptNumber);
+        if (this.priorityGroups.has(oldPriority)) {
+            this.priorityGroups.get(oldPriority).delete(interruptNumber);
+            if (this.priorityGroups.get(oldPriority).size === 0) {
+                this.priorityGroups.delete(oldPriority);
+            }
+        }
+        
+        // Add to new priority group
+        this.priorities.set(interruptNumber, newPriority);
+        if (!this.priorityGroups.has(newPriority)) {
+            this.priorityGroups.set(newPriority, new Set());
+        }
+        this.priorityGroups.get(newPriority).add(interruptNumber);
+    }
+    
+    // Enhanced PIC: Configure trigger mode (edge or level)
+    setTriggerMode(interruptNumber, mode) {
+        if (!this.priorities.has(interruptNumber)) {
+            throw new Error(`Invalid interrupt number: ${interruptNumber}`);
+        }
+        if (mode !== 'edge' && mode !== 'level') {
+            throw new Error(`Invalid trigger mode: ${mode}. Must be 'edge' or 'level'`);
+        }
+        this.triggerModes.set(interruptNumber, mode);
+    }
+    
+    // Enhanced PIC: Configure auto end-of-interrupt
+    setAutoEOI(interruptNumber, enabled) {
+        if (!this.priorities.has(interruptNumber)) {
+            throw new Error(`Invalid interrupt number: ${interruptNumber}`);
+        }
+        this.autoEOI.set(interruptNumber, enabled);
+    }
+    
+    // Enhanced PIC: Mask entire priority level
+    maskPriorityLevel(priorityLevel) {
+        if (this.priorityGroups.has(priorityLevel)) {
+            for (const interrupt of this.priorityGroups.get(priorityLevel)) {
+                this.globalMask.add(interrupt);
+            }
+        }
+    }
+    
+    // Enhanced PIC: Unmask entire priority level
+    unmaskPriorityLevel(priorityLevel) {
+        if (this.priorityGroups.has(priorityLevel)) {
+            for (const interrupt of this.priorityGroups.get(priorityLevel)) {
+                this.globalMask.delete(interrupt);
+            }
+        }
+    }
+    
+    // Enhanced PIC: Get interrupt statistics
+    getInterruptStats() {
+        const stats = {
+            totalInterrupts: this.priorities.size,
+            pendingInterrupts: this.pendingInterrupts.size,
+            maskedInterrupts: this.globalMask.size,
+            nestingLevel: this.currentNestingLevel,
+            maxNesting: this.maxNestingLevel,
+            priorityGroups: {},
+            triggerModes: Object.fromEntries(this.triggerModes),
+            autoEOI: Object.fromEntries(this.autoEOI)
+        };
+        
+        // Priority group statistics
+        for (const [priority, interrupts] of this.priorityGroups) {
+            stats.priorityGroups[priority] = {
+                count: interrupts.size,
+                interrupts: Array.from(interrupts)
+            };
+        }
+        
+        return stats;
     }
 
     // Request an interrupt
