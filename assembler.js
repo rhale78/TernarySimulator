@@ -28,15 +28,17 @@ class TernaryAssembler {
             'CMP': 30, 'JMP': 31, 'JZ': 32, 'JP': 33, 'JN': 34, 'JSR': 35, 'RTS': 36,
             'PSH': 40, 'POP': 41,
             'IN': 50, 'OUT': 51,
-            'CLKR': 60, 'CLKS': 61, 'WAIT': 62,  // New timer/clock instructions
+            'CLKR': 60, 'CLKS': 61, 'WAIT': 62,  // Timer/clock instructions
             'TEDG': 63, 'BEDG': 64,              // Edge detection instructions
             'TCRT': 65, 'TDEL': 66, 'TSET': 67, 'TSTA': 68, 'TSTP': 69, 'TSTS': 70,  // Hardware timer management
+            'SEI': 80, 'CLI': 81, 'RTI': 82, 'INT': 83, 'NMI': 84, 'SIV': 85, 'GIV': 86,  // Interrupt system
+            'LDX1': 90, 'LDX2': 91, 'LDX3': 92, 'STX1': 93, 'STX2': 94, 'STX3': 95,  // Additional index registers
             'HLT': -13  // Fits in 3 trits
         };
 
         // Register names
         this.registers = {
-            'ACC': 0, 'IX': 1, 'PC': 2, 'SP': 3, 'FLAGS': 4,
+            'ACC': 0, 'IX': 1, 'IX1': 14, 'IX2': 15, 'IX3': 16, 'PC': 2, 'SP': 3, 'FLAGS': 4,
             'R1': 5, 'R2': 6, 'R3': 7, 'R4': 8, 'R5': 9, 'R6': 10, 'R7': 11, 'R8': 12, 'R9': 13
         };
 
@@ -306,10 +308,13 @@ class TernaryAssembler {
             return this.parseValue(addr);
         }
         
-        // Indexed addressing: address,X
-        if (operandStr.includes(',X')) {
-            const addr = operandStr.substring(0, operandStr.indexOf(',X'));
-            return this.parseValue(addr);
+        // Indexed addressing: address,X or address,IX1 or address,IX2 or address,IX3
+        const indexPatterns = [',X', ',IX', ',IX1', ',IX2', ',IX3'];
+        for (const pattern of indexPatterns) {
+            if (operandStr.includes(pattern)) {
+                const addr = operandStr.substring(0, operandStr.indexOf(pattern));
+                return this.parseValue(addr);
+            }
         }
         
         // Direct addressing: just the address

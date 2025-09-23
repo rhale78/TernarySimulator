@@ -306,6 +306,7 @@ class TernarySimulator {
         this.updateRegisters();
         this.updateALU();
         this.updateDebugInfo();
+        this.updateSystemStatus();
     }
 
     updateRegisters() {
@@ -316,6 +317,9 @@ class TernarySimulator {
             'regPC': state.registers.pc,
             'regACC': state.registers.acc,
             'regIX': state.registers.ix,
+            'regIX1': state.registers.ix1,
+            'regIX2': state.registers.ix2,
+            'regIX3': state.registers.ix3,
             'regSP': state.registers.sp,
             'regFLAGS': state.registers.flags,
             'regR1': state.registers.r1,
@@ -379,6 +383,57 @@ class TernarySimulator {
         document.getElementById('executionState').textContent = 
             state.execution.running ? 'Running' : state.execution.halted ? 'Halted' : 'Stopped';
         document.getElementById('cycleCount').textContent = state.execution.cycleCount;
+    }
+
+    updateSystemStatus() {
+        // Update interrupt system status
+        if (this.cpu.interruptController) {
+            const interruptState = this.cpu.interruptController.getState();
+            
+            const interruptsEnabledEl = document.getElementById('interruptsEnabled');
+            if (interruptsEnabledEl) {
+                interruptsEnabledEl.textContent = interruptState.interruptEnabled;
+            }
+            
+            const inInterruptHandlerEl = document.getElementById('inInterruptHandler');
+            if (inInterruptHandlerEl) {
+                inInterruptHandlerEl.textContent = interruptState.inInterruptHandler;
+            }
+            
+            const pendingInterruptsEl = document.getElementById('pendingInterrupts');
+            if (pendingInterruptsEl) {
+                pendingInterruptsEl.textContent = 
+                    interruptState.pendingInterrupts.length > 0 
+                        ? interruptState.pendingInterrupts.join(', ')
+                        : 'none';
+            }
+        }
+        
+        // Update system clock
+        const systemClockEl = document.getElementById('systemClock');
+        if (systemClockEl && this.cpu.systemClock !== undefined) {
+            systemClockEl.textContent = this.cpu.systemClock;
+        }
+        
+        // Update timer information
+        if (this.cpu.clockManager) {
+            const timerInfoEl = document.getElementById('timerInfo');
+            if (timerInfoEl) {
+                const timers = this.cpu.clockManager.listTimers();
+                if (timers.length === 0) {
+                    timerInfoEl.innerHTML = '<div>No hardware timers active</div>';
+                } else {
+                    let timerHtml = '';
+                    timers.forEach(timerId => {
+                        const timer = this.cpu.clockManager.getTimer(timerId);
+                        if (timer) {
+                            timerHtml += `<div>Timer ${timerId}: ${timer.isRunning() ? 'Running' : 'Stopped'}</div>`;
+                        }
+                    });
+                    timerInfoEl.innerHTML = timerHtml;
+                }
+            }
+        }
     }
 
     updateMemoryDisplay() {
