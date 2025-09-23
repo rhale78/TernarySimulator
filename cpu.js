@@ -390,79 +390,45 @@ class TernaryCPU {
 
     buildInstructionSet() {
         return {
-            // Data movement
+            // Core data movement
             'LDA': { opcode: 1, execute: this.loadAccumulator.bind(this) },      // Load to accumulator
             'STA': { opcode: 2, execute: this.storeAccumulator.bind(this) },     // Store accumulator
             'LDX': { opcode: 3, execute: this.loadIndex.bind(this) },            // Load to index
             'STX': { opcode: 4, execute: this.storeIndex.bind(this) },           // Store index
             'MOV': { opcode: 5, execute: this.moveData.bind(this) },             // Move data
             
-            // Arithmetic
-            'ADD': { opcode: 10, execute: this.addToAccumulator.bind(this) },    // Add to accumulator
-            'SUB': { opcode: 11, execute: this.subtractFromAccumulator.bind(this) }, // Subtract from accumulator
-            'MUL': { opcode: 12, execute: this.multiplyAccumulator.bind(this) }, // Multiply accumulator
-            'INC': { opcode: 13, execute: this.incrementRegister.bind(this) },   // Increment register
-            'DEC': { opcode: 14, execute: this.decrementRegister.bind(this) },   // Decrement register
+            // Core arithmetic
+            'ADD': { opcode: 6, execute: this.addToAccumulator.bind(this) },     // Add to accumulator
+            'SUB': { opcode: 7, execute: this.subtractFromAccumulator.bind(this) }, // Subtract from accumulator
+            'MUL': { opcode: 8, execute: this.multiplyAccumulator.bind(this) },  // Multiply accumulator
+            'INC': { opcode: 9, execute: this.incrementRegister.bind(this) },    // Increment register
+            'DEC': { opcode: 10, execute: this.decrementRegister.bind(this) },   // Decrement register
             
-            // Logical
-            'AND': { opcode: 20, execute: this.logicalAnd.bind(this) },          // Logical AND
-            'OR':  { opcode: 21, execute: this.logicalOr.bind(this) },           // Logical OR
-            'NOT': { opcode: 22, execute: this.logicalNot.bind(this) },          // Logical NOT
-            'SHL': { opcode: 23, execute: this.shiftLeft.bind(this) },           // Shift left
-            'SHR': { opcode: 24, execute: this.shiftRight.bind(this) },          // Shift right
+            // Core logical
+            'AND': { opcode: 11, execute: this.logicalAnd.bind(this) },          // Logical AND
+            'OR':  { opcode: 12, execute: this.logicalOr.bind(this) },           // Logical OR
+            'NOT': { opcode: 13, execute: this.logicalNot.bind(this) },          // Logical NOT
             
-            // Comparison and branching
-            'CMP': { opcode: 30, execute: this.compare.bind(this) },             // Compare
-            'JMP': { opcode: 31, execute: this.jump.bind(this) },                // Unconditional jump
-            'JZ':  { opcode: 32, execute: this.jumpIfZero.bind(this) },          // Jump if zero
-            'JP':  { opcode: 33, execute: this.jumpIfPositive.bind(this) },      // Jump if positive
-            'JN':  { opcode: 34, execute: this.jumpIfNegative.bind(this) },      // Jump if negative
-            'JSR': { opcode: 35, execute: this.jumpSubroutine.bind(this) },      // Jump to subroutine
-            'RTS': { opcode: 36, execute: this.returnFromSubroutine.bind(this) }, // Return from subroutine
+            // Control flow
+            'CMP': { opcode: -1, execute: this.compare.bind(this) },             // Compare
+            'JMP': { opcode: -2, execute: this.jump.bind(this) },                // Unconditional jump
+            'JZ':  { opcode: -3, execute: this.jumpIfZero.bind(this) },          // Jump if zero
+            'JP':  { opcode: -4, execute: this.jumpIfPositive.bind(this) },      // Jump if positive
+            'JN':  { opcode: -5, execute: this.jumpIfNegative.bind(this) },      // Jump if negative
+            'JSR': { opcode: -6, execute: this.jumpSubroutine.bind(this) },      // Jump to subroutine
+            'RTS': { opcode: -7, execute: this.returnFromSubroutine.bind(this) }, // Return from subroutine
             
-            // Stack operations
-            'PSH': { opcode: 40, execute: this.pushStack.bind(this) },           // Push to stack
-            'POP': { opcode: 41, execute: this.popStack.bind(this) },            // Pop from stack
+            // Stack and I/O
+            'PSH': { opcode: -8, execute: this.pushStack.bind(this) },           // Push to stack
+            'POP': { opcode: -9, execute: this.popStack.bind(this) },            // Pop from stack
+            'IN':  { opcode: -10, execute: this.inputOperation.bind(this) },     // Input
+            'OUT': { opcode: -11, execute: this.outputOperation.bind(this) },    // Output
             
-            // I/O and system
-            'IN':  { opcode: 50, execute: this.inputOperation.bind(this) },      // Input
-            'OUT': { opcode: 51, execute: this.outputOperation.bind(this) },     // Output
-            'HLT': { opcode: -13, execute: this.halt.bind(this) },                // Halt
-            'NOP': { opcode: 0,  execute: this.noOperation.bind(this) },          // No operation
+            // Essential new instructions
+            'LDX1': { opcode: -12, execute: this.loadIndex1.bind(this) },        // Load to index register 1
             
-            // Timer/Clock instructions (new)
-            'CLKR': { opcode: 60, execute: this.clockRead.bind(this) },          // Read clock
-            'CLKS': { opcode: 61, execute: this.clockSet.bind(this) },           // Set timer
-            'WAIT': { opcode: 62, execute: this.waitTimer.bind(this) },          // Wait for timer
-            
-            // Edge detection instructions
-            'TEDG': { opcode: 63, execute: this.ternaryEdgeDetect.bind(this) },  // Ternary edge detect
-            'BEDG': { opcode: 64, execute: this.binaryEdgeDetect.bind(this) },   // Binary edge detect
-            
-            // Hardware timer management
-            'TCRT': { opcode: 65, execute: this.timerCreate.bind(this) },        // Create hardware timer
-            'TDEL': { opcode: 66, execute: this.timerDelete.bind(this) },        // Delete hardware timer
-            'TSET': { opcode: 67, execute: this.timerSet.bind(this) },           // Set timer preset
-            'TSTA': { opcode: 68, execute: this.timerStart.bind(this) },         // Start timer
-            'TSTP': { opcode: 69, execute: this.timerStop.bind(this) },          // Stop timer
-            'TSTS': { opcode: 70, execute: this.timerStatus.bind(this) },        // Get timer status
-            
-            // Interrupt system instructions
-            'SEI': { opcode: 80, execute: this.setInterruptFlag.bind(this) },    // Set interrupt flag (enable)
-            'CLI': { opcode: 81, execute: this.clearInterruptFlag.bind(this) },  // Clear interrupt flag (disable)
-            'RTI': { opcode: 82, execute: this.returnFromInterrupt.bind(this) }, // Return from interrupt
-            'INT': { opcode: 83, execute: this.softwareInterrupt.bind(this) },   // Software interrupt
-            'NMI': { opcode: 84, execute: this.nonMaskableInterrupt.bind(this) }, // Non-maskable interrupt
-            'SIV': { opcode: 85, execute: this.setInterruptVector.bind(this) },  // Set interrupt vector
-            'GIV': { opcode: 86, execute: this.getInterruptVector.bind(this) },  // Get interrupt vector
-            
-            // Index register operations
-            'LDX1': { opcode: 90, execute: this.loadIndex1.bind(this) },         // Load to index register 1
-            'LDX2': { opcode: 91, execute: this.loadIndex2.bind(this) },         // Load to index register 2
-            'LDX3': { opcode: 92, execute: this.loadIndex3.bind(this) },         // Load to index register 3
-            'STX1': { opcode: 93, execute: this.storeIndex1.bind(this) },        // Store index register 1
-            'STX2': { opcode: 94, execute: this.storeIndex2.bind(this) },        // Store index register 2
-            'STX3': { opcode: 95, execute: this.storeIndex3.bind(this) }         // Store index register 3
+            'NOP': { opcode: 0,  execute: this.noOperation.bind(this) },         // No operation
+            'HLT': { opcode: -13, execute: this.halt.bind(this) }                // Halt
         };
     }
 
