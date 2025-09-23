@@ -169,6 +169,31 @@ class TernaryALU {
         return this.lastResult;
     }
 
+    xor(a, b) {
+        this.lastOperation = 'XOR';
+        const result = a.xor(b);
+        this.lastResult = new Tryte(result);
+        this.updateFlags(this.lastResult);
+        return this.lastResult;
+    }
+
+    // Rotation operations
+    rotateLeft(a, positions = 1) {
+        this.lastOperation = 'ROL';
+        const result = a.rotateLeft(positions);
+        this.lastResult = new Tryte(result);
+        this.updateFlags(this.lastResult);
+        return this.lastResult;
+    }
+
+    rotateRight(a, positions = 1) {
+        this.lastOperation = 'ROR';
+        const result = a.rotateRight(positions);
+        this.lastResult = new Tryte(result);
+        this.updateFlags(this.lastResult);
+        return this.lastResult;
+    }
+
     // Shift operations
     shiftLeft(a, positions = 1) {
         this.lastOperation = 'SHL';
@@ -421,6 +446,17 @@ class TernaryCPU {
         this.pipeline = new InstructionPipeline(this);
         this.usePipeline = false; // Flag to enable/disable pipelining
         
+        // Branch prediction system
+        try {
+            const BranchPredictorModule = require('./branch_predictor.js');
+            this.branchPredictor = new BranchPredictorModule.BranchPredictor('bimodal', 256);
+            this.useBranchPrediction = true;
+        } catch (e) {
+            // Branch predictor not available in browser environment
+            this.branchPredictor = null;
+            this.useBranchPrediction = false;
+        }
+        
         // Floating-Point Unit
         this.fpu = new FloatingPointUnit();
         
@@ -485,7 +521,14 @@ class TernaryCPU {
             // Core logical
             'AND': { opcode: 11, execute: this.logicalAnd.bind(this) },          // Logical AND
             'OR':  { opcode: 12, execute: this.logicalOr.bind(this) },           // Logical OR
+            'XOR': { opcode: 52, execute: this.logicalXor.bind(this) },          // Logical XOR (exclusive or)
             'NOT': { opcode: 13, execute: this.logicalNot.bind(this) },          // Logical NOT
+            
+            // Bit/Trit operations (RISC-style)
+            'SHL': { opcode: 53, execute: this.shiftLeft.bind(this) },           // Shift left
+            'SHR': { opcode: 54, execute: this.shiftRight.bind(this) },          // Shift right
+            'ROL': { opcode: 55, execute: this.rotateLeft.bind(this) },          // Rotate left
+            'ROR': { opcode: 56, execute: this.rotateRight.bind(this) },         // Rotate right
             
             // Control flow
             'CMP': { opcode: -1, execute: this.compare.bind(this) },             // Compare
@@ -493,8 +536,13 @@ class TernaryCPU {
             'JZ':  { opcode: -3, execute: this.jumpIfZero.bind(this) },          // Jump if zero
             'JP':  { opcode: -4, execute: this.jumpIfPositive.bind(this) },      // Jump if positive
             'JN':  { opcode: -5, execute: this.jumpIfNegative.bind(this) },      // Jump if negative
+            'JNZ': { opcode: 57, execute: this.jumpIfNotZero.bind(this) },       // Jump if not zero (Z80-style)
+            'JC':  { opcode: 58, execute: this.jumpIfCarry.bind(this) },         // Jump if carry (x86-style)
+            'JNC': { opcode: 59, execute: this.jumpIfNotCarry.bind(this) },      // Jump if not carry
             'JSR': { opcode: -6, execute: this.jumpSubroutine.bind(this) },      // Jump to subroutine
             'RTS': { opcode: -7, execute: this.returnFromSubroutine.bind(this) }, // Return from subroutine
+            'CALL': { opcode: 60, execute: this.jumpSubroutine.bind(this) },     // Call subroutine (x86-style alias)
+            'RET': { opcode: 61, execute: this.returnFromSubroutine.bind(this) }, // Return (x86-style alias)
             
             // Stack and I/O
             'PSH': { opcode: -8, execute: this.pushStack.bind(this) },           // Push to stack
@@ -718,6 +766,32 @@ class TernaryCPU {
         this.registers.set('flags', this.alu.getFlagsAsTrits());
     }
 
+    logicalXor(operand) {
+        let value;
+        if (typeof operand === 'number') {
+            value = new Tryte(operand);
+        } else {
+            value = this.memory.read(operand);
+        }
+        const result = this.alu.xor(this.registers.get('acc'), value);
+        this.registers.set('acc', result);
+        this.registers.set('flags', this.alu.getFlagsAsTrits());
+    }
+
+    rotateLeft(operand) {
+        const positions = operand ? (typeof operand === 'number' ? operand : operand.toDecimal()) : 1;
+        const result = this.alu.rotateLeft(this.registers.get('acc'), positions);
+        this.registers.set('acc', result);
+        this.registers.set('flags', this.alu.getFlagsAsTrits());
+    }
+
+    rotateRight(operand) {
+        const positions = operand ? (typeof operand === 'number' ? operand : operand.toDecimal()) : 1;
+        const result = this.alu.rotateRight(this.registers.get('acc'), positions);
+        this.registers.set('acc', result);
+        this.registers.set('flags', this.alu.getFlagsAsTrits());
+    }
+
     shiftLeft(operand) {
         const positions = operand ? operand.toDecimal() : 1;
         const result = this.alu.shiftLeft(this.registers.get('acc'), positions);
@@ -756,6 +830,24 @@ class TernaryCPU {
 
     jumpIfNegative(operand) {
         if (this.alu.isNegative()) {
+            this.registers.set('pc', operand);
+        }
+    }
+
+    jumpIfNotZero(operand) {
+        if (!this.alu.isZero()) {
+            this.registers.set('pc', operand);
+        }
+    }
+
+    jumpIfCarry(operand) {
+        if (this.alu.hasCarry()) {
+            this.registers.set('pc', operand);
+        }
+    }
+
+    jumpIfNotCarry(operand) {
+        if (!this.alu.hasCarry()) {
             this.registers.set('pc', operand);
         }
     }

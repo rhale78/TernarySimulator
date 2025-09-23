@@ -284,6 +284,47 @@ class BalancedTernary {
         return new BalancedTernary(result);
     }
 
+    xor(other) {
+        const otherBT = other instanceof BalancedTernary ? other : new BalancedTernary(other);
+        const maxLength = Math.max(this.trits.length, otherBT.trits.length);
+        const result = [];
+
+        for (let i = 0; i < maxLength; i++) {
+            const a = i < this.trits.length ? this.trits[i] : 0;
+            const b = i < otherBT.trits.length ? otherBT.trits[i] : 0;
+            
+            // Ternary XOR: Different when values differ, 0 when same
+            if (a === b) {
+                result.push(0);
+            } else if ((a === -1 && b === 1) || (a === 1 && b === -1)) {
+                result.push(0); // Maximum difference results in neutral
+            } else {
+                result.push(a !== 0 ? a : b); // Non-zero dominates
+            }
+        }
+
+        return new BalancedTernary(result);
+    }
+
+    // Rotation operations
+    rotateLeft(positions = 1) {
+        const len = this.trits.length;
+        if (len === 0) return new BalancedTernary([]);
+        
+        const actualPositions = positions % len;
+        const result = [...this.trits.slice(actualPositions), ...this.trits.slice(0, actualPositions)];
+        return new BalancedTernary(result);
+    }
+
+    rotateRight(positions = 1) {
+        const len = this.trits.length;
+        if (len === 0) return new BalancedTernary([]);
+        
+        const actualPositions = positions % len;
+        const result = [...this.trits.slice(-actualPositions), ...this.trits.slice(0, -actualPositions)];
+        return new BalancedTernary(result);
+    }
+
     // Shift operations using component-based shift register
     shiftLeft(positions = 1) {
         // Load trits into shift register and shift left

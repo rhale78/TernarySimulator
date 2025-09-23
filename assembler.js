@@ -29,10 +29,13 @@ class TernaryAssembler {
             // Core arithmetic 
             'ADD': 6, 'SUB': 7, 'MUL': 8, 'DIV': 50, 'MOD': 51, 'INC': 9, 'DEC': 10,
             // Core logical
-            'AND': 11, 'OR': 12, 'NOT': 13,
+            'AND': 11, 'OR': 12, 'XOR': 52, 'NOT': 13,
+            // Bit/Trit operations  
+            'SHL': 53, 'SHR': 54, 'ROL': 55, 'ROR': 56,
             // Control flow
             'CMP': -1, 'JMP': -2, 'JZ': -3, 'JP': -4, 'JN': -5, 
-            'JSR': -6, 'RTS': -7,
+            'JNZ': 57, 'JC': 58, 'JNC': 59, 'JSR': -6, 'RTS': -7,
+            'CALL': 60, 'RET': 61, // x86-style aliases
             // Stack and I/O
             'PSH': -8, 'POP': -9, 'IN': -10, 'OUT': -11,
             // Essential new instructions  

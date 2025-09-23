@@ -6,7 +6,12 @@
 class TernarySimulator {
     constructor() {
         this.memory = new TernaryMemory(9); // 9-trit addressing
+        
+        // Multi-core support - default to single core, user can change
+        this.coreCount = 1;
+        this.multiCore = null;
         this.cpu = new TernaryCPU(this.memory);
+        
         this.assembler = new TernaryAssembler();
         this.highlevelCompiler = null; // Initialize lazily
         this.io = new MemoryMappedIO(this.memory);
@@ -98,6 +103,12 @@ class TernarySimulator {
         // Pipeline controls
         document.getElementById('togglePipelineBtn')?.addEventListener('click', () => this.togglePipeline());
         document.getElementById('pipelineStatsBtn')?.addEventListener('click', () => this.showPipelineStats());
+        
+        // Multi-core controls
+        document.getElementById('applyCoreConfigBtn')?.addEventListener('click', () => this.applyCoreConfiguration());
+        document.getElementById('switchCoreBtn')?.addEventListener('click', () => this.switchActiveCore());
+        document.getElementById('toggleParallelBtn')?.addEventListener('click', () => this.toggleParallelMode());
+        document.getElementById('multicoreStatsBtn')?.addEventListener('click', () => this.showMulticoreStats());
         
         // Editor enhancements
         const editor = document.getElementById('programEditor');
@@ -612,6 +623,48 @@ class TernarySimulator {
             if (pipelineEfficiencyEl) {
                 pipelineEfficiencyEl.textContent = `${((pipelineState.efficiency || 0) * 100).toFixed(1)}%`;
             }
+        }
+        
+        // Update multi-core status
+        const activeCoreEl = document.getElementById('activeCoreId');
+        if (activeCoreEl) {
+            if (this.multiCore) {
+                activeCoreEl.textContent = this.multiCore.activeCore || 0;
+            } else {
+                activeCoreEl.textContent = '0';
+            }
+        }
+        
+        const parallelModeEl = document.getElementById('parallelMode');
+        if (parallelModeEl) {
+            if (this.multiCore) {
+                parallelModeEl.textContent = this.multiCore.parallelMode || false;
+            } else {
+                parallelModeEl.textContent = 'false';
+            }
+        }
+        
+        const globalCyclesEl = document.getElementById('globalCycles');
+        if (globalCyclesEl) {
+            if (this.multiCore) {
+                globalCyclesEl.textContent = this.multiCore.globalCycleCount || 0;
+            } else {
+                globalCyclesEl.textContent = this.cpu.cycleCount || 0;
+            }
+        }
+        
+        // Update branch prediction status
+        const branchPredictionEl = document.getElementById('branchPredictionEnabled');
+        if (branchPredictionEl) {
+            branchPredictionEl.textContent = this.cpu.useBranchPrediction || false;
+        }
+        
+        const branchAccuracyEl = document.getElementById('branchAccuracy');
+        if (branchAccuracyEl && this.cpu.branchPredictor) {
+            const stats = this.cpu.branchPredictor.getStats();
+            branchAccuracyEl.textContent = `${(stats.accuracy * 100).toFixed(1)}%`;
+        } else if (branchAccuracyEl) {
+            branchAccuracyEl.textContent = '0%';
         }
         
         // Update timer information
@@ -1409,6 +1462,124 @@ CPI (Cycles per Instruction): ${(stats.cpi || 1).toFixed(2)}`;
             this.showMessage(statsText, 'info');
         } else {
             this.showMessage('Pipeline not available', 'warning');
+        }
+    }
+
+    // Multi-core control methods
+    applyCoreConfiguration() {
+        const coreCountSelect = document.getElementById('coreCountSelect');
+        const newCoreCount = parseInt(coreCountSelect.value);
+        
+        if (newCoreCount !== this.coreCount) {
+            this.coreCount = newCoreCount;
+            
+            // Reinitialize with new core count
+            if (newCoreCount > 1) {
+                try {
+                    // Try to load multi-core module (Node.js environment)
+                    const { MultiCoreCPU } = require('./multicore.js');
+                    this.multiCore = new MultiCoreCPU(this.memory, newCoreCount);
+                    this.cpu = this.multiCore.getPrimaryCore();
+                    this.showMessage(`Configured ${newCoreCount}-core CPU`, 'success');
+                } catch (e) {
+                    // Fallback for browser environment - simulate multi-core
+                    this.simulateMultiCore(newCoreCount);
+                    this.showMessage(`Simulated ${newCoreCount}-core CPU (browser mode)`, 'info');
+                }
+            } else {
+                // Single core mode
+                this.multiCore = null;
+                this.cpu = new TernaryCPU(this.memory);
+                this.showMessage('Configured single-core CPU', 'info');
+            }
+            
+            this.updateDisplay();
+        }
+    }
+
+    simulateMultiCore(coreCount) {
+        // Browser-compatible multi-core simulation
+        this.multiCore = {
+            coreCount: coreCount,
+            cores: [],
+            activeCore: 0,
+            parallelMode: false,
+            globalCycleCount: 0
+        };
+        
+        for (let i = 0; i < coreCount; i++) {
+            const core = new TernaryCPU(this.memory);
+            core.coreId = i;
+            this.multiCore.cores.push(core);
+        }
+        
+        this.cpu = this.multiCore.cores[0];
+    }
+
+    switchActiveCore() {
+        if (this.multiCore && this.multiCore.coreCount > 1) {
+            const currentCore = this.multiCore.activeCore || 0;
+            const nextCore = (currentCore + 1) % this.multiCore.coreCount;
+            
+            if (this.multiCore.switchCore) {
+                this.multiCore.switchCore(nextCore);
+            } else {
+                this.multiCore.activeCore = nextCore;
+            }
+            
+            this.cpu = this.multiCore.cores[nextCore];
+            this.showMessage(`Switched to Core ${nextCore}`, 'info');
+            this.updateDisplay();
+        } else {
+            this.showMessage('Multi-core not configured', 'warning');
+        }
+    }
+
+    toggleParallelMode() {
+        if (this.multiCore && this.multiCore.coreCount > 1) {
+            if (this.multiCore.setParallelMode) {
+                const newMode = !this.multiCore.parallelMode;
+                this.multiCore.setParallelMode(newMode);
+            } else {
+                this.multiCore.parallelMode = !this.multiCore.parallelMode;
+            }
+            
+            this.showMessage(`Parallel mode ${this.multiCore.parallelMode ? 'enabled' : 'disabled'}`, 'info');
+            this.updateDisplay();
+        } else {
+            this.showMessage('Multi-core not configured', 'warning');
+        }
+    }
+
+    showMulticoreStats() {
+        if (this.multiCore) {
+            let statsText;
+            
+            if (this.multiCore.getPerformanceStats) {
+                const stats = this.multiCore.getPerformanceStats();
+                statsText = `Multi-Core Statistics:
+Core Count: ${stats.coreCount}
+Global Cycles: ${stats.globalCycles}
+Total Instructions: ${stats.totalInstructions}
+Average Utilization: ${(stats.averageUtilization * 100).toFixed(1)}%
+Instructions Per Cycle: ${stats.ipc.toFixed(3)}
+
+Per-Core Stats:
+${stats.coreStats.map(core => 
+    `Core ${core.coreId}: ${core.instructions} instructions, ${(core.utilization * 100).toFixed(1)}% utilization`
+).join('\n')}`;
+            } else {
+                // Browser simulation stats
+                statsText = `Multi-Core Simulation:
+Core Count: ${this.multiCore.coreCount}
+Active Core: ${this.multiCore.activeCore}
+Parallel Mode: ${this.multiCore.parallelMode}
+Global Cycles: ${this.multiCore.globalCycleCount}`;
+            }
+            
+            this.showMessage(statsText, 'info');
+        } else {
+            this.showMessage('Multi-core not configured', 'warning');
         }
     }
 }
