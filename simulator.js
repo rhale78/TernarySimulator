@@ -95,6 +95,10 @@ class TernarySimulator {
         document.getElementById('resetProfileBtn')?.addEventListener('click', () => this.resetProfiler());
         document.getElementById('toggleProfilingBtn')?.addEventListener('click', () => this.toggleProfiling());
         
+        // Pipeline controls
+        document.getElementById('togglePipelineBtn')?.addEventListener('click', () => this.togglePipeline());
+        document.getElementById('pipelineStatsBtn')?.addEventListener('click', () => this.showPipelineStats());
+        
         // Editor enhancements
         const editor = document.getElementById('programEditor');
         if (editor) {
@@ -568,6 +572,46 @@ class TernarySimulator {
         const systemClockEl = document.getElementById('systemClock');
         if (systemClockEl && this.cpu.systemClock !== undefined) {
             systemClockEl.textContent = this.cpu.systemClock;
+        }
+        
+        // Update pipeline status
+        if (this.cpu.pipeline) {
+            const pipelineState = this.cpu.pipeline.getState();
+            
+            const pipelineEnabledEl = document.getElementById('pipelineEnabled');
+            if (pipelineEnabledEl) {
+                pipelineEnabledEl.textContent = this.cpu.usePipeline || false;
+            }
+            
+            const fetchStageEl = document.getElementById('fetchStage');
+            if (fetchStageEl) {
+                fetchStageEl.textContent = pipelineState.fetchStage || 'empty';
+            }
+            
+            const decodeStageEl = document.getElementById('decodeStage');
+            if (decodeStageEl) {
+                decodeStageEl.textContent = pipelineState.decodeStage || 'empty';
+            }
+            
+            const executeStageEl = document.getElementById('executeStage');
+            if (executeStageEl) {
+                executeStageEl.textContent = pipelineState.executeStage || 'empty';
+            }
+            
+            const writebackStageEl = document.getElementById('writebackStage');
+            if (writebackStageEl) {
+                writebackStageEl.textContent = pipelineState.writebackStage || 'empty';
+            }
+            
+            const pipelineStallsEl = document.getElementById('pipelineStalls');
+            if (pipelineStallsEl) {
+                pipelineStallsEl.textContent = pipelineState.stalls || 0;
+            }
+            
+            const pipelineEfficiencyEl = document.getElementById('pipelineEfficiency');
+            if (pipelineEfficiencyEl) {
+                pipelineEfficiencyEl.textContent = `${((pipelineState.efficiency || 0) * 100).toFixed(1)}%`;
+            }
         }
         
         // Update timer information
@@ -1333,6 +1377,39 @@ Stride Access (100 ops):
         
         this.instructionFrequency.set(instrName, (this.instructionFrequency.get(instrName) || 0) + 1);
         this.updateProfilerDisplay();
+    }
+
+    // Pipeline control methods
+    togglePipeline() {
+        if (this.cpu && this.cpu.pipeline) {
+            this.cpu.usePipeline = !this.cpu.usePipeline;
+            
+            const button = document.getElementById('togglePipelineBtn');
+            if (button) {
+                button.textContent = this.cpu.usePipeline ? 'Disable Pipeline' : 'Enable Pipeline';
+                button.classList.toggle('active', this.cpu.usePipeline);
+            }
+            
+            this.showMessage(`Pipeline ${this.cpu.usePipeline ? 'enabled' : 'disabled'}`, 'info');
+            this.updateDisplay();
+        }
+    }
+
+    showPipelineStats() {
+        if (this.cpu && this.cpu.pipeline) {
+            const stats = this.cpu.pipeline.getStats();
+            const statsText = `Pipeline Statistics:
+Instructions Executed: ${stats.instructionsExecuted || 0}
+Pipeline Stalls: ${stats.stalls || 0}
+Branch Hazards: ${stats.branchHazards || 0}
+Data Hazards: ${stats.dataHazards || 0}
+Efficiency: ${((stats.efficiency || 0) * 100).toFixed(1)}%
+CPI (Cycles per Instruction): ${(stats.cpi || 1).toFixed(2)}`;
+            
+            this.showMessage(statsText, 'info');
+        } else {
+            this.showMessage('Pipeline not available', 'warning');
+        }
     }
 }
 

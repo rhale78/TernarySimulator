@@ -287,6 +287,23 @@
                 <div>Cycle Count: <span id="cycleCount">0</span></div>
             </div>
             
+            <h3>Pipeline Status</h3>
+            <div class="pipeline-section">
+                <div class="pipeline-info">
+                    <div>Pipeline Enabled: <span id="pipelineEnabled">false</span></div>
+                    <div>Fetch Stage: <span id="fetchStage">empty</span></div>
+                    <div>Decode Stage: <span id="decodeStage">empty</span></div>
+                    <div>Execute Stage: <span id="executeStage">empty</span></div>
+                    <div>Writeback Stage: <span id="writebackStage">empty</span></div>
+                    <div>Pipeline Stalls: <span id="pipelineStalls">0</span></div>
+                    <div>Pipeline Efficiency: <span id="pipelineEfficiency">0%</span></div>
+                </div>
+                <div class="pipeline-controls">
+                    <button id="togglePipelineBtn">Toggle Pipeline</button>
+                    <button id="pipelineStatsBtn">Pipeline Stats</button>
+                </div>
+            </div>
+            
             <h3>System Status</h3>
             <div class="system-status">
                 <div class="interrupt-section">
