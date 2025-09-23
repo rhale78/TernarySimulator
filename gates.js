@@ -285,12 +285,137 @@ class TernaryInverter {
     }
 }
 
+/**
+ * Ternary Latch - stores ternary state with clock-driven timing
+ * Custom ternary logic with proper clock enable signals
+ */
+class TernaryLatch {
+    constructor() {
+        this.state = 0; // Current state: -1, 0, or 1
+        this.enabled = false;
+    }
+    
+    process(data, enable = true, clock = true) {
+        // Only update state when enabled and clock is active
+        if (enable && clock) {
+            this.enabled = true;
+            if (data !== -1 && data !== 0 && data !== 1) {
+                throw new Error(`Invalid ternary value: ${data}`);
+            }
+            this.state = data;
+        } else {
+            this.enabled = false;
+        }
+        
+        return this.state;
+    }
+    
+    getState() {
+        return this.state;
+    }
+    
+    isEnabled() {
+        return this.enabled;
+    }
+}
+
+/**
+ * Ternary Flip-Flop - ternary D flip-flop with proper edge triggering
+ * Updates on ternary clock transitions (0->1 or 0->-1)
+ */
+class TernaryFlipFlop {
+    constructor() {
+        this.state = 0;
+        this.lastClock = 0;
+        this.enabled = false;
+    }
+    
+    process(data, clock, enable = true) {
+        if (!enable) return this.state;
+        
+        // Detect ternary clock edges: 0->1 (positive) or 0->-1 (negative)
+        const positiveEdge = (this.lastClock === 0 && clock === 1);
+        const negativeEdge = (this.lastClock === 0 && clock === -1);
+        this.lastClock = clock;
+        
+        if (positiveEdge || negativeEdge) {
+            this.enabled = true;
+            if (data !== -1 && data !== 0 && data !== 1) {
+                throw new Error(`Invalid ternary value: ${data}`);
+            }
+            this.state = data;
+        } else {
+            this.enabled = false;
+        }
+        
+        return this.state;
+    }
+    
+    getState() {
+        return this.state;
+    }
+    
+    isEnabled() {
+        return this.enabled;
+    }
+}
+
+/**
+ * Clock-driven Binary Buffer - respects chip enable timing
+ */
+class ClockDrivenBinaryBuffer extends BinaryBuffer {
+    constructor() {
+        super();
+        this.clockEnabled = false;
+    }
+    
+    process(input, enable = true, clock = true) {
+        // Only process when both enabled and clock is high
+        this.clockEnabled = enable && clock;
+        
+        if (!this.clockEnabled) return null; // High impedance state
+        return input ? 1 : 0;
+    }
+    
+    isClockEnabled() {
+        return this.clockEnabled;
+    }
+}
+
+/**
+ * Clock-driven Ternary Buffer - respects chip enable timing
+ */
+class ClockDrivenTernaryBuffer extends TernaryBuffer {
+    constructor() {
+        super();
+        this.clockEnabled = false;
+    }
+    
+    process(input, enable = true, clock = true) {
+        // Only process when both enabled and clock is active (non-zero)
+        this.clockEnabled = enable && (clock !== 0);
+        
+        if (!this.clockEnabled) return null; // High impedance
+        
+        // Validate ternary input
+        if (input !== -1 && input !== 0 && input !== 1) {
+            throw new Error(`Invalid ternary value: ${input}`);
+        }
+        return input;
+    }
+    
+    isClockEnabled() {
+        return this.clockEnabled;
+    }
+}
+
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         BinaryBuffer, BinaryInverter, BinaryAND, BinaryOR, BinaryNAND, BinaryNOR, BinaryXOR,
         BinaryHalfAdder, BinaryFullAdder, BinaryLatch, BinaryFlipFlop,
         BinaryMux2to1, BinaryDemux1to2,
-        TernaryBuffer, TernaryInverter
+        TernaryBuffer, TernaryInverter, TernaryLatch, TernaryFlipFlop,
+        ClockDrivenBinaryBuffer, ClockDrivenTernaryBuffer
     };
 }

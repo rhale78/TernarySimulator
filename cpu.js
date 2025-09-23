@@ -22,6 +22,13 @@ if (typeof module !== 'undefined' && module.exports) {
     global.TernaryShiftRegister = ternaryGatesModule.TernaryShiftRegister;
     global.TernaryMultiplier = ternaryGatesModule.TernaryMultiplier;
     global.TernaryMemoryCell = ternaryGatesModule.TernaryMemoryCell;
+    
+    // Import clock and microcode systems
+    const clocksModule = require('./clocks.js');
+    global.ClockManager = clocksModule.ClockManager;
+    
+    const microcodeModule = require('./microcode.js');
+    global.MicrocodeEngine = microcodeModule.MicrocodeEngine;
 }
 
 class TernaryALU {
@@ -317,8 +324,22 @@ class TernaryCPU {
         this.currentInstruction = null;
         this.breakpoints = new Set();
         
+        // Clock and microcode systems
+        this.clockManager = new ClockManager();
+        this.microcodeEngine = null; // Will be initialized after clockManager
+        this.useMicrocode = true; // Flag to enable/disable microcode execution
+        
+        // Initialize microcode engine
+        this._initializeMicrocodeEngine();
+        
         // Instruction set - separate opcodes for immediate and direct addressing
         this.instructions = this.buildInstructionSet();
+    }
+    
+    _initializeMicrocodeEngine() {
+        if (typeof MicrocodeEngine !== 'undefined') {
+            this.microcodeEngine = new MicrocodeEngine(this, this.clockManager);
+        }
     }
 
     buildInstructionSet() {
@@ -361,7 +382,12 @@ class TernaryCPU {
             'IN':  { opcode: 50, execute: this.inputOperation.bind(this) },      // Input
             'OUT': { opcode: 51, execute: this.outputOperation.bind(this) },     // Output
             'HLT': { opcode: -13, execute: this.halt.bind(this) },                // Halt
-            'NOP': { opcode: 0,  execute: this.noOperation.bind(this) }          // No operation
+            'NOP': { opcode: 0,  execute: this.noOperation.bind(this) },          // No operation
+            
+            // Timer/Clock instructions (new)
+            'CLKR': { opcode: 60, execute: this.clockRead.bind(this) },          // Read clock
+            'CLKS': { opcode: 61, execute: this.clockSet.bind(this) },           // Set timer
+            'WAIT': { opcode: 62, execute: this.waitTimer.bind(this) }           // Wait for timer
         };
     }
 
@@ -582,6 +608,45 @@ class TernaryCPU {
         // Do nothing
     }
 
+    // New timer/clock instructions
+    clockRead(operand) {
+        // Read current clock phase/count into accumulator
+        const clockValue = this.clockManager.getTernaryClock().getPhase();
+        this.registers.set('acc', new Tryte(clockValue));
+    }
+
+    clockSet(operand) {
+        // Set timer delay from operand
+        const delay = operand ? operand : this.registers.get('acc').toDecimal();
+        if (this.microcodeEngine) {
+            this.microcodeEngine.timerValue = delay;
+            this.microcodeEngine.timerActive = true;
+            
+            // Set timeout for timer completion
+            setTimeout(() => {
+                if (this.microcodeEngine) {
+                    this.microcodeEngine.timerActive = false;
+                }
+            }, delay * 10); // delay * 10ms for timing
+        }
+    }
+
+    waitTimer(operand) {
+        // Wait for timer to complete (non-blocking check)
+        if (this.microcodeEngine) {
+            const timerComplete = !this.microcodeEngine.timerActive;
+            // Set zero flag based on timer status
+            if (timerComplete) {
+                this.alu.lastResult = new Tryte(0); // Set zero result
+                this.alu.updateFlags(this.alu.lastResult);
+            } else {
+                this.alu.lastResult = new Tryte(1); // Set non-zero result
+                this.alu.updateFlags(this.alu.lastResult);
+            }
+            this.registers.set('flags', this.alu.getFlagsAsTrits());
+        }
+    }
+
     // CPU execution control
     step() {
         if (this.halted) return false;
@@ -653,9 +718,64 @@ class TernaryCPU {
         this.running = true;
         this.halted = false;
         
+        // Start clock manager
+        this.clockManager.start();
+        
+        if (this.useMicrocode && this.microcodeEngine) {
+            // Microcode-driven execution
+            this.runMicrocode();
+        } else {
+            // Legacy execution mode
+            this.runLegacy();
+        }
+    }
+    
+    runMicrocode() {
+        // Clock-driven execution via microcode engine
+        this.microcodeEngine.state = 'FETCH';
+        
+        // The microcode engine handles execution through clock callbacks
+        // We just need to handle the main fetch-decode-execute cycle
+        const fetchDecodeExecute = () => {
+            if (!this.running || this.halted) {
+                this.clockManager.stop();
+                return;
+            }
+            
+            // Check if we need to start a new instruction
+            if (this.microcodeEngine.state === 'FETCH' && this.microcodeEngine.isComplete()) {
+                const pc = this.registers.get('pc');
+                
+                // Check breakpoints
+                if (this.breakpoints.has(pc.toString())) {
+                    this.running = false;
+                    console.log(`Breakpoint hit at ${pc.toString()}`);
+                    this.clockManager.stop();
+                    return;
+                }
+                
+                // Fetch instruction
+                const instruction = this.memory.read(pc);
+                this.currentInstruction = instruction;
+                
+                // Start microcode execution
+                this.microcodeEngine.startInstruction(instruction);
+            }
+            
+            // Continue execution loop
+            setTimeout(fetchDecodeExecute, 1); // Check frequently for new instructions
+        };
+        
+        fetchDecodeExecute();
+    }
+    
+    runLegacy() {
+        // Original execution mode for compatibility
         const runLoop = () => {
             if (this.running && this.step()) {
                 setTimeout(runLoop, 10); // 100Hz execution speed
+            } else {
+                this.clockManager.stop();
             }
         };
         
@@ -664,6 +784,7 @@ class TernaryCPU {
 
     pause() {
         this.running = false;
+        this.clockManager.stop();
     }
 
     reset() {
@@ -673,6 +794,12 @@ class TernaryCPU {
         this.running = false;
         this.cycleCount = 0;
         this.currentInstruction = null;
+        
+        // Reset clock and microcode systems
+        this.clockManager.reset();
+        if (this.microcodeEngine) {
+            this.microcodeEngine.reset();
+        }
     }
 
     // Debugging support
@@ -691,7 +818,7 @@ class TernaryCPU {
     }
 
     getState() {
-        return {
+        const baseState = {
             registers: this.registers.getState(),
             alu: {
                 lastOperation: this.alu.lastOperation,
@@ -702,9 +829,32 @@ class TernaryCPU {
                 halted: this.halted,
                 running: this.running,
                 cycleCount: this.cycleCount,
-                currentInstruction: this.currentInstruction ? this.currentInstruction.toString() : null
+                currentInstruction: this.currentInstruction ? this.currentInstruction.toString() : null,
+                useMicrocode: this.useMicrocode
             }
         };
+        
+        // Add clock manager status
+        if (this.clockManager) {
+            baseState.clockStatus = this.clockManager.getStatus();
+        }
+        
+        // Add microcode engine status
+        if (this.microcodeEngine) {
+            baseState.microcodeStatus = this.microcodeEngine.getState();
+        }
+        
+        return baseState;
+    }
+    
+    // Method to toggle between microcode and legacy execution
+    setMicrocodeEnabled(enabled) {
+        this.useMicrocode = enabled;
+        if (!enabled && this.running) {
+            // If switching to legacy mode while running, restart execution
+            this.pause();
+            this.run();
+        }
     }
 }
 
