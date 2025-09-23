@@ -10,6 +10,18 @@ if (typeof module !== 'undefined' && module.exports) {
     global.Tryte = ternaryModule.Tryte;
     global.TernaryAddress = ternaryModule.TernaryAddress;
     global.TernaryUtils = ternaryModule.TernaryUtils;
+    
+    // Import ternary components for ALU
+    const ternaryGatesModule = require('./ternary_gates.js');
+    global.TernaryAND = ternaryGatesModule.TernaryAND;
+    global.TernaryOR = ternaryGatesModule.TernaryOR;
+    global.TernaryComparator = ternaryGatesModule.TernaryComparator;
+    global.TernaryHalfAdder = ternaryGatesModule.TernaryHalfAdder;
+    global.TernaryFullAdder = ternaryGatesModule.TernaryFullAdder;
+    global.TernaryRippleCarryAdder = ternaryGatesModule.TernaryRippleCarryAdder;
+    global.TernaryShiftRegister = ternaryGatesModule.TernaryShiftRegister;
+    global.TernaryMultiplier = ternaryGatesModule.TernaryMultiplier;
+    global.TernaryMemoryCell = ternaryGatesModule.TernaryMemoryCell;
 }
 
 class TernaryALU {
@@ -24,6 +36,24 @@ class TernaryALU {
             overflow: 0,  // -1: underflow, 0: no overflow, 1: overflow
             carry: 0      // -1: borrow, 0: no carry, 1: carry
         };
+        
+        // Initialize component-based arithmetic units for true ternary emulation
+        this._initializeComponents();
+    }
+    
+    // Initialize component-based arithmetic units
+    _initializeComponents() {
+        // Import ternary components if available
+        if (typeof TernaryRippleCarryAdder !== 'undefined') {
+            this.adder = new TernaryRippleCarryAdder(6);
+            this.multiplier = new TernaryMultiplier(6);
+            this.andGate = new TernaryAND();
+            this.orGate = new TernaryOR();
+            this.comparator = new TernaryComparator();
+            this.componentsAvailable = true;
+        } else {
+            this.componentsAvailable = false;
+        }
     }
 
     // Update flags based on result

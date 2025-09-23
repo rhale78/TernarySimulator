@@ -2,10 +2,29 @@
  * Balanced Ternary Number System Implementation
  * Uses trits with values: -1, 0, +1
  * 6 trits = 1 tryte
+ * 
+ * Modified to use component-based arithmetic for true ternary emulation
  */
+
+// Import ternary components if in Node.js environment
+if (typeof module !== 'undefined' && module.exports) {
+    const ternaryGatesModule = require('./ternary_gates.js');
+    global.TernaryAND = ternaryGatesModule.TernaryAND;
+    global.TernaryOR = ternaryGatesModule.TernaryOR;
+    global.TernaryComparator = ternaryGatesModule.TernaryComparator;
+    global.TernaryHalfAdder = ternaryGatesModule.TernaryHalfAdder;
+    global.TernaryFullAdder = ternaryGatesModule.TernaryFullAdder;
+    global.TernaryRippleCarryAdder = ternaryGatesModule.TernaryRippleCarryAdder;
+    global.TernaryShiftRegister = ternaryGatesModule.TernaryShiftRegister;
+    global.TernaryMultiplier = ternaryGatesModule.TernaryMultiplier;
+    global.TernaryMemoryCell = ternaryGatesModule.TernaryMemoryCell;
+}
 
 class BalancedTernary {
     constructor(value = 0) {
+        // Initialize component-based arithmetic units
+        this._initializeComponents();
+        
         if (typeof value === 'string') {
             this.trits = this.parseString(value);
         } else if (typeof value === 'number') {
@@ -16,6 +35,22 @@ class BalancedTernary {
             this.trits = [0];
         }
         this.normalize();
+    }
+    
+    // Initialize component-based arithmetic units for true ternary emulation
+    _initializeComponents() {
+        // Create shared component instances for this class
+        if (!BalancedTernary._sharedComponents) {
+            BalancedTernary._sharedComponents = {
+                adder: new TernaryRippleCarryAdder(12), // Support up to 12 trits
+                multiplier: new TernaryMultiplier(12),
+                andGate: new TernaryAND(),
+                orGate: new TernaryOR(),
+                comparator: new TernaryComparator(),
+                shiftRegister: new TernaryShiftRegister(12)
+            };
+        }
+        this.components = BalancedTernary._sharedComponents;
     }
 
     // Parse balanced ternary string (using T, 0, 1 or -, 0, +)
@@ -132,31 +167,14 @@ class BalancedTernary {
         return result;
     }
 
-    // Addition
+    // Addition using component-based arithmetic
     add(other) {
         const otherBT = other instanceof BalancedTernary ? other : new BalancedTernary(other);
-        const maxLength = Math.max(this.trits.length, otherBT.trits.length);
-        const result = [];
-        let carry = 0;
-
-        for (let i = 0; i < maxLength || carry !== 0; i++) {
-            const a = i < this.trits.length ? this.trits[i] : 0;
-            const b = i < otherBT.trits.length ? otherBT.trits[i] : 0;
-            let sum = a + b + carry;
-
-            carry = 0;
-            if (sum > 1) {
-                carry = 1;
-                sum -= 3;
-            } else if (sum < -1) {
-                carry = -1;
-                sum += 3;
-            }
-
-            result.push(sum);
-        }
-
-        return new BalancedTernary(result);
+        
+        // Use the ternary ripple carry adder component for true emulation
+        const addResult = this.components.adder.process(this.trits, otherBT.trits);
+        
+        return new BalancedTernary(addResult.result);
     }
 
     // Subtraction
@@ -171,30 +189,14 @@ class BalancedTernary {
         return new BalancedTernary(negated);
     }
 
-    // Multiplication
+    // Multiplication using component-based arithmetic
     multiply(other) {
         const otherBT = other instanceof BalancedTernary ? other : new BalancedTernary(other);
-        let result = new BalancedTernary(0);
-
-        for (let i = 0; i < otherBT.trits.length; i++) {
-            if (otherBT.trits[i] !== 0) {
-                let partial = new BalancedTernary(this.trits);
-                
-                // Multiply by power of 3 (shift)
-                for (let j = 0; j < i; j++) {
-                    partial.trits.unshift(0);
-                }
-                
-                // Multiply by trit value
-                if (otherBT.trits[i] === -1) {
-                    partial = partial.negate();
-                }
-                
-                result = result.add(partial);
-            }
-        }
-
-        return result;
+        
+        // Use the ternary multiplier component for true emulation
+        const mulResult = this.components.multiplier.process(this.trits, otherBT.trits);
+        
+        return new BalancedTernary(mulResult.result);
     }
 
     // Comparison
@@ -213,6 +215,7 @@ class BalancedTernary {
     }
 
     // Bitwise operations adapted for ternary
+    // Bitwise operations adapted for ternary using component gates
     and(other) {
         const otherBT = other instanceof BalancedTernary ? other : new BalancedTernary(other);
         const maxLength = Math.max(this.trits.length, otherBT.trits.length);
@@ -222,14 +225,8 @@ class BalancedTernary {
             const a = i < this.trits.length ? this.trits[i] : 0;
             const b = i < otherBT.trits.length ? otherBT.trits[i] : 0;
             
-            // Ternary AND: both must be +1 to result in +1
-            if (a === 1 && b === 1) {
-                result.push(1);
-            } else if (a === -1 || b === -1) {
-                result.push(-1);
-            } else {
-                result.push(0);
-            }
+            // Use component-based ternary AND gate
+            result.push(this.components.andGate.process(a, b));
         }
 
         return new BalancedTernary(result);
@@ -244,16 +241,8 @@ class BalancedTernary {
             const a = i < this.trits.length ? this.trits[i] : 0;
             const b = i < otherBT.trits.length ? otherBT.trits[i] : 0;
             
-            // Ternary OR: either +1 results in +1
-            if (a === 1 || b === 1) {
-                result.push(1);
-            } else if (a === -1 && b === -1) {
-                result.push(-1);
-            } else if (a === -1 || b === -1) {
-                result.push(0);
-            } else {
-                result.push(0);
-            }
+            // Use component-based ternary OR gate
+            result.push(this.components.orGate.process(a, b));
         }
 
         return new BalancedTernary(result);
@@ -265,20 +254,27 @@ class BalancedTernary {
         return new BalancedTernary(result);
     }
 
-    // Shift operations
+    // Shift operations using component-based shift register
     shiftLeft(positions = 1) {
-        const result = [...this.trits];
+        // Load trits into shift register and shift left
+        this.components.shiftRegister.load(this.trits);
+        
         for (let i = 0; i < positions; i++) {
-            result.unshift(0);
+            this.components.shiftRegister.shiftLeft(0);
         }
-        return new BalancedTernary(result);
+        
+        return new BalancedTernary(this.components.shiftRegister.getState());
     }
 
     shiftRight(positions = 1) {
-        const result = [...this.trits];
+        // Load trits into shift register and shift right
+        this.components.shiftRegister.load(this.trits);
+        
         for (let i = 0; i < positions; i++) {
-            result.shift();
+            this.components.shiftRegister.shiftRight(0);
         }
+        
+        const result = this.components.shiftRegister.getState();
         return new BalancedTernary(result.length > 0 ? result : [0]);
     }
 }
