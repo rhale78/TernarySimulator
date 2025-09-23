@@ -8,11 +8,13 @@ class TernarySimulator {
         this.memory = new TernaryMemory(9); // 9-trit addressing
         this.cpu = new TernaryCPU(this.memory);
         this.assembler = new TernaryAssembler();
+        this.highlevelCompiler = null; // Initialize lazily
         this.io = new MemoryMappedIO(this.memory);
         
         this.isRunning = false;
         this.executionSpeed = 100; // Hz
         this.executionInterval = null;
+        this.currentLanguage = 'assembly';
         
         this.initializeUI();
         this.setupEventListeners();
@@ -43,6 +45,13 @@ class TernarySimulator {
         // Editor controls
         document.getElementById('assembleBtn')?.addEventListener('click', () => this.assemble());
         document.getElementById('loadExampleBtn')?.addEventListener('click', () => this.loadExample());
+        document.getElementById('loadHLExampleBtn')?.addEventListener('click', () => this.loadHighLevelExample());
+        
+        // Language selection
+        const languageSelect = document.getElementById('languageSelect');
+        if (languageSelect) {
+            languageSelect.addEventListener('change', () => this.onLanguageChange());
+        }
         
         // Memory controls
         document.getElementById('refreshMemoryBtn')?.addEventListener('click', () => this.updateMemoryDisplay());
@@ -83,21 +92,51 @@ class TernarySimulator {
     // Assembly and program loading
     assemble() {
         const sourceCode = document.getElementById('programEditor')?.value || '';
+        const languageSelect = document.getElementById('languageSelect');
+        const currentLanguage = languageSelect?.value || 'assembly';
         
         try {
-            const result = this.assembler.assemble(sourceCode, 0);
+            let result;
+            
+            if (currentLanguage === 'highlevel') {
+                // Initialize compiler if not already done
+                if (!this.highlevelCompiler) {
+                    if (typeof TernaryHighLevelCompiler === 'undefined') {
+                        this.showMessage('High-level compiler not available', 'error');
+                        return;
+                    }
+                    this.highlevelCompiler = new TernaryHighLevelCompiler();
+                }
+                
+                // Compile high-level language to assembly first
+                const compileResult = this.highlevelCompiler.compile(sourceCode);
+                
+                if (!compileResult.success) {
+                    this.showMessage(`Compilation error: ${compileResult.error}`, 'error');
+                    return;
+                }
+                
+                // Show generated assembly in console for debugging
+                console.log('Generated Assembly:', compileResult.assembly);
+                
+                // Now assemble the generated assembly code
+                result = this.assembler.assemble(compileResult.assembly, 0);
+            } else {
+                // Direct assembly
+                result = this.assembler.assemble(sourceCode, 0);
+            }
             
             if (result.success) {
                 // Load program into memory
                 this.loadProgramIntoMemory(result.machineCode);
-                this.showMessage('Assembly successful!', 'success');
+                this.showMessage(`${currentLanguage === 'highlevel' ? 'Compilation and assembly' : 'Assembly'} successful!`, 'success');
                 this.updateMemoryDisplay();
                 this.updateDisplay();
             } else {
                 this.showMessage(`Assembly error: ${result.error} (line ${result.line})`, 'error');
             }
         } catch (error) {
-            this.showMessage(`Assembly error: ${error.message}`, 'error');
+            this.showMessage(`Error: ${error.message}`, 'error');
         }
     }
 
@@ -127,6 +166,69 @@ class TernarySimulator {
 
         document.getElementById('programEditor').value = nextExample.code;
         this.showMessage(`Loaded: ${nextExample.name}`, 'info');
+    }
+
+    onLanguageChange() {
+        const languageSelect = document.getElementById('languageSelect');
+        const programEditor = document.getElementById('programEditor');
+        const loadExampleBtn = document.getElementById('loadExampleBtn');
+        const loadHLExampleBtn = document.getElementById('loadHLExampleBtn');
+        const assembleBtn = document.getElementById('assembleBtn');
+        
+        if (!languageSelect) return;
+        
+        this.currentLanguage = languageSelect.value;
+        
+        if (this.currentLanguage === 'highlevel') {
+            // Switch to high-level language mode
+            if (programEditor) programEditor.placeholder = 'Enter your C-like high-level code here...';
+            if (loadExampleBtn) loadExampleBtn.style.display = 'none';
+            if (loadHLExampleBtn) loadHLExampleBtn.style.display = 'inline-block';
+            if (assembleBtn) assembleBtn.textContent = 'Compile & Assemble';
+            
+            // Load default high-level example if available
+            if (programEditor && !programEditor.value.trim() && typeof TernaryHighLevelCompiler !== 'undefined') {
+                programEditor.value = TernaryHighLevelCompiler.getExampleProgram();
+            }
+        } else {
+            // Switch to assembly mode
+            if (programEditor) programEditor.placeholder = 'Enter your balanced ternary assembly code here...';
+            if (loadExampleBtn) loadExampleBtn.style.display = 'inline-block';
+            if (loadHLExampleBtn) loadHLExampleBtn.style.display = 'none';
+            if (assembleBtn) assembleBtn.textContent = 'Assemble';
+            
+            // Load default assembly example
+            if (programEditor && !programEditor.value.trim()) {
+                programEditor.value = TernaryAssembler.getExampleProgram();
+            }
+        }
+    }
+
+    loadHighLevelExample() {
+        if (typeof TernaryHighLevelCompiler === 'undefined') {
+            this.showMessage('High-level compiler not available', 'error');
+            return;
+        }
+        
+        const examples = [
+            { name: 'Basic Math', code: TernaryHighLevelCompiler.getExampleProgram() },
+            { name: 'Loop Example', code: TernaryHighLevelCompiler.getLoopExample() },
+            { name: 'Conditional', code: TernaryHighLevelCompiler.getConditionExample() }
+        ];
+
+        // Simple example rotation
+        const currentCode = document.getElementById('programEditor')?.value || '';
+        let nextExample = examples[0];
+
+        for (let i = 0; i < examples.length; i++) {
+            if (currentCode.includes(examples[i].name.split(' ')[0].toLowerCase())) {
+                nextExample = examples[(i + 1) % examples.length];
+                break;
+            }
+        }
+
+        document.getElementById('programEditor').value = nextExample.code;
+        this.showMessage(`Loaded HL: ${nextExample.name}`, 'info');
     }
 
     // Execution control

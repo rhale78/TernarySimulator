@@ -22,10 +22,19 @@
             <div class="left-panel">
                 <div class="editor-section">
                     <h3>Program Editor</h3>
+                    <div class="language-controls">
+                        <label>Language: 
+                            <select id="languageSelect">
+                                <option value="assembly">Ternary Assembly</option>
+                                <option value="highlevel">C-like High Level</option>
+                            </select>
+                        </label>
+                    </div>
                     <textarea id="programEditor" placeholder="Enter your balanced ternary assembly code here..."></textarea>
                     <div class="editor-controls">
                         <button id="assembleBtn">Assemble</button>
                         <button id="loadExampleBtn">Load Example</button>
+                        <button id="loadHLExampleBtn" style="display: none;">Load HL Example</button>
                     </div>
                 </div>
                 
@@ -181,6 +190,7 @@
     <script src="cpu.js"></script>
     <script src="memory.js"></script>
     <script src="assembler.js"></script>
+    <script src="highlevel.js"></script>
     <script src="simulator.js"></script>
 </body>
 </html>
