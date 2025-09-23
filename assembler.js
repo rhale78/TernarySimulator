@@ -35,7 +35,28 @@ class TernaryAssembler {
             'PSH': -8, 'POP': -9, 'IN': -10, 'OUT': -11,
             // Essential new instructions  
             'LDX1': -12, // Load index register 1
-            'HLT': -13   // Halt instruction
+            'HLT': -13,  // Halt instruction
+            
+            // Extended word operations (using 2-trit opcodes for broader range)
+            // Note: These require special handling as they exceed 3-trit range
+            'LDAW': 14,  // Load Accumulator Word (12 trits)
+            'STAW': 15,  // Store Accumulator Word
+            'ADDW': 16,  // Add Word
+            'SUBW': 17,  // Subtract Word
+            'MULW': 18,  // Multiply Word
+            
+            // Triple-word operations  
+            'LDAT': 19,  // Load Accumulator Triple-word (18 trits)
+            'STAT': 20,  // Store Accumulator Triple-word
+            'ADDT': 21,  // Add Triple-word
+            'SUBT': 22,  // Subtract Triple-word
+            'MULT': 23,  // Multiply Triple-word
+            
+            // Memory block operations
+            'MOVC': 24,  // Memory copy block
+            'MOVW': 25,  // Move word block
+            'MOVT': 26,  // Move triple-word block
+            'CLRB': 27   // Clear block
         };
 
         // Register names
