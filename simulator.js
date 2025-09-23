@@ -79,6 +79,11 @@ class TernarySimulator {
         // Disk drive controls
         document.getElementById('diskListBtn')?.addEventListener('click', () => this.listDiskFiles());
         document.getElementById('diskStatsBtn')?.addEventListener('click', () => this.showDiskStats());
+        
+        // DMA controller controls
+        document.getElementById('dmaShowChannelsBtn')?.addEventListener('click', () => this.showDMAChannels());
+        document.getElementById('dmaStatsBtn')?.addEventListener('click', () => this.showDMAStats());
+        document.getElementById('dmaTestBtn')?.addEventListener('click', () => this.testDMATransfer());
     }
 
     initializeGraphics() {
@@ -93,6 +98,9 @@ class TernarySimulator {
         
         // Initialize virtual disk drive
         this.diskDrive = new VirtualDiskDrive();
+        
+        // Initialize DMA controller
+        this.dmaController = new DMAController(this.memory);
     }
 
     clearGraphics() {
@@ -326,6 +334,12 @@ class TernarySimulator {
         this.updateDebugInfo();
         this.updateSystemStatus();
         this.updateDiskStatus();
+        this.updateDMAStatus();
+        
+        // Process DMA transfers
+        if (this.dmaController) {
+            this.dmaController.processDMATransfers();
+        }
     }
 
     updateRegisters() {
@@ -685,6 +699,90 @@ Sector Size: ${stats.sectorSize} trytes`;
             document.getElementById('diskFiles').textContent = stats.totalFiles;
             document.getElementById('diskMaxFiles').textContent = stats.maxFiles;
             document.getElementById('diskUsage').textContent = stats.utilization;
+        }
+    }
+
+    // DMA controller interface
+    showDMAChannels() {
+        if (this.dmaController) {
+            try {
+                const channels = this.dmaController.getChannelStatuses();
+                const output = document.getElementById('dmaOutput');
+                if (output) {
+                    let listing = 'DMA Channels:\n';
+                    for (let channel of channels) {
+                        const status = channel.enabled ? (channel.busy ? 'BUSY' : 'READY') : 
+                                     channel.completed ? 'DONE' : channel.error ? 'ERROR' : 'IDLE';
+                        listing += `CH${channel.channelId}: ${status.padEnd(5)} ${channel.progress.padEnd(6)} P${channel.priority} ${channel.mode}\n`;
+                    }
+                    output.textContent = listing;
+                }
+                this.updateDMAStatus();
+            } catch (error) {
+                this.showMessage(`DMA error: ${error.message}`, 'error');
+            }
+        }
+    }
+
+    showDMAStats() {
+        if (this.dmaController) {
+            const stats = this.dmaController.getStats();
+            const output = document.getElementById('dmaOutput');
+            if (output) {
+                const statsText = `DMA Statistics:
+Enabled: ${stats.enabled ? 'Yes' : 'No'}
+Total Channels: ${stats.totalChannels}
+Active Channels: ${stats.activeChannels}
+Total Transfers: ${stats.totalTransfers}
+Total Bytes: ${stats.totalBytes}
+Clock Cycles: ${stats.clockCycles}
+Efficiency: ${stats.efficiency}
+Arbitration: ${stats.arbitrationMode}`;
+                output.textContent = statsText;
+            }
+            this.updateDMAStatus();
+        }
+    }
+
+    testDMATransfer() {
+        if (this.dmaController) {
+            try {
+                // Configure a test transfer on channel 0
+                this.dmaController.configureChannel(0, {
+                    sourceAddress: 0,
+                    destinationAddress: 100,
+                    transferSize: 10,
+                    direction: 'memory_to_io',
+                    transferMode: 'block',
+                    priority: 0
+                });
+                
+                // Start the transfer
+                this.dmaController.startTransfer(0);
+                
+                const output = document.getElementById('dmaOutput');
+                if (output) {
+                    output.textContent = 'Test DMA transfer started on channel 0\nTransferring 10 bytes from address 0 to 100\nMode: block transfer, Priority: 0';
+                }
+                
+                this.updateDMAStatus();
+                this.showMessage('DMA test transfer started', 'success');
+            } catch (error) {
+                this.showMessage(`DMA test error: ${error.message}`, 'error');
+            }
+        }
+    }
+
+    updateDMAStatus() {
+        if (this.dmaController) {
+            const stats = this.dmaController.getStats();
+            
+            document.getElementById('dmaStatus').textContent = 
+                stats.enabled ? (stats.activeChannels > 0 ? 'Active' : 'Ready') : 'Disabled';
+                
+            document.getElementById('dmaActiveChannels').textContent = stats.activeChannels;
+            document.getElementById('dmaTotalTransfers').textContent = stats.totalTransfers;
+            document.getElementById('dmaEfficiency').textContent = stats.efficiency;
         }
     }
 

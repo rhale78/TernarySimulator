@@ -305,6 +305,13 @@ class MemoryMappedIO {
             write: (addr, value) => this.handleDiskWrite(addr, value)
         });
 
+        // DMA controller I/O (18 addresses for DMA operations)
+        this.defineRegion(maxAddr - 6729, maxAddr - 6712, {
+            name: 'dma_io',
+            read: (addr) => this.handleDMARead(addr),
+            write: (addr, value) => this.handleDMAWrite(addr, value)
+        });
+
         // System control
         this.defineRegion(maxAddr - 5, maxAddr - 1, {
             name: 'system',
@@ -413,6 +420,25 @@ class MemoryMappedIO {
             const maxAddr = this.memory.maxAddress;
             const diskAddr = address.toDecimal() - (maxAddr - 6711);
             window.simulator.diskDrive.handleMemoryWrite(diskAddr, value);
+        }
+    }
+
+    handleDMARead(address) {
+        // Read from DMA controller
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.dmaController) {
+            const maxAddr = this.memory.maxAddress;
+            const dmaAddr = address.toDecimal() - (maxAddr - 6729);
+            return window.simulator.dmaController.handleMemoryRead(dmaAddr);
+        }
+        return new Tryte(0);
+    }
+
+    handleDMAWrite(address, value) {
+        // Write to DMA controller
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.dmaController) {
+            const maxAddr = this.memory.maxAddress;
+            const dmaAddr = address.toDecimal() - (maxAddr - 6729);
+            window.simulator.dmaController.handleMemoryWrite(dmaAddr, value);
         }
     }
 
