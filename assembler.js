@@ -28,6 +28,7 @@ class TernaryAssembler {
             'CMP': 30, 'JMP': 31, 'JZ': 32, 'JP': 33, 'JN': 34, 'JSR': 35, 'RTS': 36,
             'PSH': 40, 'POP': 41,
             'IN': 50, 'OUT': 51,
+            'CLKR': 60, 'CLKS': 61, 'WAIT': 62,  // New timer/clock instructions
             'HLT': -13  // Fits in 3 trits
         };
 
