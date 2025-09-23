@@ -80,12 +80,20 @@ class TernarySimulator {
             this.graphicsContext = canvas.getContext('2d');
             this.clearGraphics();
         }
+        
+        // Initialize ternary graphics display
+        this.ternaryGraphics = new TernaryGraphicsDisplay(81, 81);
     }
 
     clearGraphics() {
         if (this.graphicsContext) {
             this.graphicsContext.fillStyle = '#000000';
             this.graphicsContext.fillRect(0, 0, 240, 160);
+        }
+        
+        // Clear ternary graphics
+        if (this.ternaryGraphics) {
+            this.ternaryGraphics.clear();
         }
     }
 

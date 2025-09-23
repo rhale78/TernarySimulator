@@ -181,8 +181,17 @@
                         <div id="consoleOutput" class="console-output"></div>
                     </div>
                     <div class="graphics">
-                        <h4>Graphics Display (24x16)</h4>
+                        <h4>Character Display (24x16)</h4>
                         <canvas id="graphicsDisplay" width="240" height="160"></canvas>
+                    </div>
+                    <div class="ternary-graphics">
+                        <h4>Ternary Graphics (81x81 - 9 colors)</h4>
+                        <canvas id="ternaryGraphicsDisplay" width="324" height="324"></canvas>
+                        <div class="graphics-info">
+                            <div>Pixel Size: 4x4</div>
+                            <div>Colors: 9 ternary combinations</div>
+                            <div>Memory: 6561 pixels</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -233,6 +242,7 @@
     <script src="microcode.js"></script>
     <script src="interrupts.js"></script>
     <script src="ternary.js"></script>
+    <script src="graphics.js"></script>
     <script src="cpu.js"></script>
     <script src="memory.js"></script>
     <script src="assembler.js"></script>

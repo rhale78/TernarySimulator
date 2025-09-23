@@ -284,11 +284,18 @@ class MemoryMappedIO {
             write: (value) => this.handleConsoleOutput(value)
         });
 
-        // Graphics memory (character mode)
-        this.defineRegion(maxAddr - 50, maxAddr - 11, {
-            name: 'graphics',
+        // Character graphics memory (legacy character mode)
+        this.defineRegion(maxAddr - 100, maxAddr - 51, {
+            name: 'char_graphics',
             read: (addr) => this.handleGraphicsRead(addr),
             write: (addr, value) => this.handleGraphicsWrite(addr, value)
+        });
+
+        // Ternary graphics memory (pixel mode - 6561 pixels for 81x81 display)
+        this.defineRegion(maxAddr - 6661, maxAddr - 101, {
+            name: 'ternary_graphics',
+            read: (addr) => this.handleTernaryGraphicsRead(addr),
+            write: (addr, value) => this.handleTernaryGraphicsWrite(addr, value)
         });
 
         // System control
@@ -362,6 +369,25 @@ class MemoryMappedIO {
     handleSystemWrite(address, value) {
         // System control
         console.log(`System control write: ${address.toString()} = ${value.toString()}`);
+    }
+
+    handleTernaryGraphicsRead(address) {
+        // Read pixel data from ternary graphics display
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.ternaryGraphics) {
+            const maxAddr = this.memory.maxAddress;
+            const graphicsAddr = address.toDecimal() - (maxAddr - 6661);
+            return window.simulator.ternaryGraphics.readPixelAsTryte(graphicsAddr);
+        }
+        return new Tryte(0);
+    }
+
+    handleTernaryGraphicsWrite(address, value) {
+        // Write pixel data to ternary graphics display
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.ternaryGraphics) {
+            const maxAddr = this.memory.maxAddress;
+            const graphicsAddr = address.toDecimal() - (maxAddr - 6661);
+            window.simulator.ternaryGraphics.writePixelFromTryte(graphicsAddr, value);
+        }
     }
 
     // These methods would be implemented to interface with the actual display
