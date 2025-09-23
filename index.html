@@ -30,11 +30,16 @@
                             </select>
                         </label>
                     </div>
-                    <textarea id="programEditor" placeholder="Enter your balanced ternary assembly code here..."></textarea>
+                    <div class="editor-container">
+                        <div class="line-numbers" id="lineNumbers"></div>
+                        <textarea id="programEditor" placeholder="Enter your balanced ternary assembly code here..."></textarea>
+                        <div class="breakpoint-gutter" id="breakpointGutter"></div>
+                    </div>
                     <div class="editor-controls">
                         <button id="assembleBtn">Assemble</button>
                         <button id="loadExampleBtn">Load Example</button>
                         <button id="loadHLExampleBtn" style="display: none;">Load HL Example</button>
+                        <button id="clearBreakpointsBtn">Clear All Breakpoints</button>
                     </div>
                 </div>
                 
@@ -49,9 +54,15 @@
                                 <option value="64">64</option>
                             </select>
                         </label>
-                        <button id="memoryPrevBtn">◀ Prev</button>
-                        <button id="memoryNextBtn">Next ▶</button>
+                        <button id="prevPageBtn">◀ Prev</button>
+                        <button id="nextPageBtn">Next ▶</button>
                         <button id="refreshMemoryBtn">Refresh</button>
+                    </div>
+                    <div class="memory-search">
+                        <label>Search: <input type="text" id="memorySearchInput" placeholder="Search value or address..."></label>
+                        <button id="memorySearchBtn">Find</button>
+                        <button id="memorySearchNextBtn">Next</button>
+                        <button id="memorySearchPrevBtn">Prev</button>
                     </div>
                     <div id="memoryDisplay" class="memory-display"></div>
                     
@@ -170,6 +181,34 @@
                         <div id="aluDisplay" class="alu-display">
                             <div>Last Operation: <span id="lastOp">None</span></div>
                             <div>Result: <span id="lastResult">000000</span></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stack-section">
+                    <h3>Stack Viewer</h3>
+                    <div class="stack-controls">
+                        <button id="refreshStackBtn">Refresh</button>
+                        <label>Depth: <input type="number" id="stackDepth" value="10" min="1" max="50" style="width: 60px;"></label>
+                    </div>
+                    <div id="stackDisplay" class="stack-display"></div>
+                </div>
+                
+                <div class="profiler-section">
+                    <h3>Performance Profiler</h3>
+                    <div class="profiler-controls">
+                        <button id="resetProfileBtn">Reset</button>
+                        <button id="toggleProfilingBtn">Start Profiling</button>
+                    </div>
+                    <div id="profilerDisplay" class="profiler-display">
+                        <div class="profiler-stats">
+                            <div>Instructions Executed: <span id="instrCount">0</span></div>
+                            <div>Cycles per Second: <span id="cyclesPerSec">0</span></div>
+                            <div>Most Used Instruction: <span id="mostUsedInstr">None</span></div>
+                        </div>
+                        <div class="instruction-frequency">
+                            <h4>Instruction Frequency</h4>
+                            <div id="instrFrequency" class="frequency-chart"></div>
                         </div>
                     </div>
                 </div>
