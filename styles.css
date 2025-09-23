@@ -106,17 +106,66 @@ header h1 {
     font-family: inherit;
 }
 
-#programEditor {
-    width: 100%;
-    height: 300px;
+/* Enhanced Editor with Line Numbers and Breakpoints */
+.editor-container {
+    position: relative;
+    display: flex;
     background-color: #1a1a1a;
-    color: #e0e0e0;
     border: 1px solid #555;
     border-radius: 4px;
-    padding: 10px;
+    margin: 10px 0;
+}
+
+.line-numbers {
+    background-color: #333;
+    color: #888;
+    padding: 8px 5px;
+    text-align: right;
+    min-width: 30px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.4;
+    border-right: 1px solid #555;
+    user-select: none;
+}
+
+.breakpoint-gutter {
+    width: 20px;
+    background-color: #444;
+    border-right: 1px solid #555;
+    cursor: pointer;
+    position: relative;
+}
+
+.breakpoint {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #ff4444;
+    margin: 2px auto;
+    display: block;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.current-line-highlight {
+    background-color: rgba(255, 255, 0, 0.2) !important;
+    border-left: 3px solid #ffff00;
+}
+
+#programEditor {
+    flex: 1;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    border: none;
+    padding: 8px;
     font-family: 'Courier New', monospace;
     font-size: 14px;
     resize: vertical;
+    min-height: 300px;
+    line-height: 1.4;
 }
 
 .editor-controls {
@@ -146,6 +195,45 @@ header h1 {
     gap: 10px;
     margin-bottom: 10px;
     flex-wrap: wrap;
+}
+
+.memory-search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding: 8px;
+    background-color: #333;
+    border-radius: 4px;
+}
+
+.memory-search input {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-family: inherit;
+    width: 200px;
+}
+
+.memory-search button {
+    background-color: #555;
+    color: white;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.memory-search button:hover {
+    background-color: #666;
+}
+
+.memory-search-result {
+    background-color: rgba(255, 255, 0, 0.3) !important;
+    border: 1px solid #ffff00;
 }
 
 .memory-controls label {
@@ -510,4 +598,147 @@ header h1 {
     0% { opacity: 1; }
     50% { opacity: 0.7; }
     100% { opacity: 1; }
+}
+
+/* Stack Viewer Styles */
+.stack-section {
+    background-color: #2d2d2d;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.stack-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.stack-controls button, .stack-controls input {
+    background-color: #555;
+    color: white;
+    border: 1px solid #666;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-family: inherit;
+}
+
+.stack-display {
+    background-color: #1a1a1a;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+}
+
+.stack-entry {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+    border-bottom: 1px solid #333;
+}
+
+.stack-entry:last-child {
+    border-bottom: none;
+}
+
+.stack-address {
+    color: #888;
+    width: 100px;
+}
+
+.stack-value {
+    color: #e0e0e0;
+    font-weight: bold;
+}
+
+.stack-sp-pointer {
+    color: #ffff00;
+    font-weight: bold;
+}
+
+/* Profiler Styles */
+.profiler-section {
+    background-color: #2d2d2d;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.profiler-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.profiler-controls button {
+    background-color: #555;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.profiler-controls button:hover {
+    background-color: #666;
+}
+
+.profiler-controls button.active {
+    background-color: #4CAF50;
+}
+
+.profiler-stats {
+    background-color: #1a1a1a;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+.profiler-stats div {
+    margin: 5px 0;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+}
+
+.frequency-chart {
+    background-color: #1a1a1a;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+}
+
+.frequency-bar {
+    display: flex;
+    align-items: center;
+    margin: 2px 0;
+}
+
+.frequency-name {
+    width: 60px;
+    color: #e0e0e0;
+}
+
+.frequency-visual {
+    height: 12px;
+    background-color: #4CAF50;
+    margin-left: 10px;
+    border-radius: 2px;
+}
+
+.frequency-count {
+    margin-left: 10px;
+    color: #888;
+    font-size: 10px;
 }

@@ -16,6 +16,18 @@ class TernarySimulator {
         this.executionInterval = null;
         this.currentLanguage = 'assembly';
         
+        // Enhanced debugging features
+        this.sourceLines = [];
+        this.breakpoints = new Set();
+        this.currentSourceLine = -1;
+        this.addressToLine = new Map();
+        this.lineToAddress = new Map();
+        this.memorySearchResults = [];
+        this.memorySearchIndex = 0;
+        this.isProfilingEnabled = false;
+        this.instructionFrequency = new Map();
+        this.startTime = Date.now();
+        
         this.initializeUI();
         this.setupEventListeners();
         this.updateDisplay();
@@ -55,8 +67,8 @@ class TernarySimulator {
         
         // Memory controls
         document.getElementById('refreshMemoryBtn')?.addEventListener('click', () => this.updateMemoryDisplay());
-        document.getElementById('memoryPrevBtn')?.addEventListener('click', () => this.previousMemoryPage());
-        document.getElementById('memoryNextBtn')?.addEventListener('click', () => this.nextMemoryPage());
+        document.getElementById('prevPageBtn')?.addEventListener('click', () => this.previousMemoryPage());
+        document.getElementById('nextPageBtn')?.addEventListener('click', () => this.nextMemoryPage());
         
         // Memory page controls
         const memoryPageInput = document.getElementById('memoryPage');
@@ -72,6 +84,32 @@ class TernarySimulator {
                 this.updateMemoryDisplay();
             });
         }
+        
+        // Enhanced debugging controls
+        document.getElementById('clearBreakpointsBtn')?.addEventListener('click', () => this.clearAllBreakpoints());
+        document.getElementById('memorySearchBtn')?.addEventListener('click', () => this.searchMemory());
+        document.getElementById('memorySearchNextBtn')?.addEventListener('click', () => this.searchMemoryNext());
+        document.getElementById('memorySearchPrevBtn')?.addEventListener('click', () => this.searchMemoryPrev());
+        document.getElementById('refreshStackBtn')?.addEventListener('click', () => this.updateStackDisplay());
+        document.getElementById('resetProfileBtn')?.addEventListener('click', () => this.resetProfiler());
+        document.getElementById('toggleProfilingBtn')?.addEventListener('click', () => this.toggleProfiling());
+        
+        // Editor enhancements
+        const editor = document.getElementById('programEditor');
+        if (editor) {
+            editor.addEventListener('input', () => this.updateLineNumbers());
+            editor.addEventListener('scroll', () => this.syncEditorScroll());
+        }
+        
+        // Breakpoint gutter click handler
+        document.getElementById('breakpointGutter')?.addEventListener('click', (e) => this.handleBreakpointClick(e));
+        
+        // Memory search on Enter key
+        document.getElementById('memorySearchInput')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.searchMemory();
+        });
+        
+        this.updateLineNumbers();
     }
 
     initializeGraphics() {
@@ -94,6 +132,9 @@ class TernarySimulator {
         const sourceCode = document.getElementById('programEditor')?.value || '';
         const languageSelect = document.getElementById('languageSelect');
         const currentLanguage = languageSelect?.value || 'assembly';
+        
+        // Store source lines for debugging
+        this.sourceLines = sourceCode.split('\n');
         
         try {
             let result;
@@ -129,14 +170,59 @@ class TernarySimulator {
             if (result.success) {
                 // Load program into memory
                 this.loadProgramIntoMemory(result.machineCode);
+                
+                // Build line-to-address mapping for debugging
+                this.buildLineToAddressMapping(result);
+                
+                // Set breakpoints that were set in the editor
+                this.syncBreakpointsWithCPU();
+                
                 this.showMessage(`${currentLanguage === 'highlevel' ? 'Compilation and assembly' : 'Assembly'} successful!`, 'success');
                 this.updateMemoryDisplay();
                 this.updateDisplay();
+                this.updateLineNumbers();
             } else {
                 this.showMessage(`Assembly error: ${result.error} (line ${result.line})`, 'error');
             }
         } catch (error) {
             this.showMessage(`Error: ${error.message}`, 'error');
+        }
+    }
+
+    buildLineToAddressMapping(assemblyResult) {
+        this.addressToLine.clear();
+        this.lineToAddress.clear();
+        
+        if (assemblyResult.lineMapping) {
+            // Use line mapping from assembler if available
+            for (const [address, lineNumber] of assemblyResult.lineMapping.entries()) {
+                this.addressToLine.set(address, lineNumber);
+                this.lineToAddress.set(lineNumber, address);
+            }
+        } else {
+            // Fallback: simple 1:1 mapping for basic assembly
+            let address = 0;
+            for (let lineNumber = 1; lineNumber <= this.sourceLines.length; lineNumber++) {
+                const line = this.sourceLines[lineNumber - 1].trim();
+                if (line && !line.startsWith(';') && !line.startsWith('.')) {
+                    this.addressToLine.set(address, lineNumber);
+                    this.lineToAddress.set(lineNumber, address);
+                    address++;
+                }
+            }
+        }
+    }
+
+    syncBreakpointsWithCPU() {
+        // Clear CPU breakpoints
+        this.cpu.clearAllBreakpoints();
+        
+        // Set CPU breakpoints for editor breakpoints that have address mappings
+        for (const lineNumber of this.breakpoints) {
+            const address = this.lineToAddress.get(lineNumber);
+            if (address !== undefined) {
+                this.cpu.setBreakpoint(address);
+            }
         }
     }
 
@@ -254,10 +340,34 @@ class TernarySimulator {
             this.pause();
         }
         
+        if (this.cpu.halted) {
+            this.showMessage('CPU is halted', 'info');
+            return;
+        }
+        
+        // Get current PC before stepping
+        const currentPC = this.cpu.registers.get('pc').toDecimal();
+        
+        // Record current instruction for profiling
+        if (this.isProfilingEnabled) {
+            const instruction = this.memory.read(this.cpu.registers.get('pc'));
+            this.recordInstructionExecution(instruction);
+        }
+        
+        // Update current source line highlighting
+        const lineNumber = this.addressToLine.get(currentPC);
+        if (lineNumber !== undefined) {
+            this.currentSourceLine = lineNumber;
+            this.highlightCurrentLine();
+        }
+        
         const success = this.cpu.step();
         this.updateDisplay();
+        this.updateStackDisplay();
         
         if (!success || this.cpu.halted) {
+            this.currentSourceLine = -1;
+            this.highlightCurrentLine();
             this.showMessage('Execution stopped', 'info');
         }
     }
@@ -455,6 +565,7 @@ class TernarySimulator {
             for (let entry of row) {
                 const cell = document.createElement('div');
                 cell.className = 'memory-cell';
+                cell.setAttribute('data-address', entry.address); // Add for search functionality
                 if (!entry.initialized) {
                     cell.classList.add('uninitialized');
                 }
@@ -662,6 +773,279 @@ class TernarySimulator {
                 halted: this.cpu.halted
             }
         };
+    }
+
+    // Enhanced debugging methods
+    updateLineNumbers() {
+        const editor = document.getElementById('programEditor');
+        const lineNumbers = document.getElementById('lineNumbers');
+        const breakpointGutter = document.getElementById('breakpointGutter');
+        
+        if (!editor || !lineNumbers || !breakpointGutter) return;
+        
+        const lines = editor.value.split('\n');
+        this.sourceLines = lines;
+        
+        // Update line numbers
+        let numbersHtml = '';
+        let gutterHtml = '';
+        
+        for (let i = 1; i <= lines.length; i++) {
+            numbersHtml += `<div class="line-number" data-line="${i}">${i}</div>`;
+            const hasBreakpoint = this.breakpoints.has(i);
+            gutterHtml += `<div class="gutter-line" data-line="${i}" style="height: 1.4em; position: relative;">
+                ${hasBreakpoint ? '<div class="breakpoint"></div>' : ''}
+            </div>`;
+        }
+        
+        lineNumbers.innerHTML = numbersHtml;
+        breakpointGutter.innerHTML = gutterHtml;
+    }
+
+    syncEditorScroll() {
+        const editor = document.getElementById('programEditor');
+        const lineNumbers = document.getElementById('lineNumbers');
+        const breakpointGutter = document.getElementById('breakpointGutter');
+        
+        if (!editor || !lineNumbers || !breakpointGutter) return;
+        
+        lineNumbers.scrollTop = editor.scrollTop;
+        breakpointGutter.scrollTop = editor.scrollTop;
+    }
+
+    handleBreakpointClick(event) {
+        const lineDiv = event.target.closest('.gutter-line');
+        if (!lineDiv) return;
+        
+        const lineNumber = parseInt(lineDiv.dataset.line);
+        this.toggleBreakpoint(lineNumber);
+    }
+
+    toggleBreakpoint(lineNumber) {
+        if (this.breakpoints.has(lineNumber)) {
+            this.breakpoints.delete(lineNumber);
+            // Also clear CPU breakpoint if we have address mapping
+            const address = this.lineToAddress.get(lineNumber);
+            if (address !== undefined) {
+                this.cpu.clearBreakpoint(address);
+            }
+        } else {
+            this.breakpoints.add(lineNumber);
+            // Also set CPU breakpoint if we have address mapping
+            const address = this.lineToAddress.get(lineNumber);
+            if (address !== undefined) {
+                this.cpu.setBreakpoint(address);
+            }
+        }
+        this.updateLineNumbers();
+    }
+
+    clearAllBreakpoints() {
+        this.breakpoints.clear();
+        this.cpu.clearAllBreakpoints();
+        this.updateLineNumbers();
+        this.showMessage('All breakpoints cleared', 'info');
+    }
+
+    highlightCurrentLine() {
+        const lineNumbers = document.getElementById('lineNumbers');
+        if (!lineNumbers) return;
+        
+        // Clear previous highlights
+        lineNumbers.querySelectorAll('.current-line-highlight').forEach(el => 
+            el.classList.remove('current-line-highlight'));
+        
+        if (this.currentSourceLine > 0 && this.currentSourceLine <= this.sourceLines.length) {
+            const lineDiv = lineNumbers.querySelector(`[data-line="${this.currentSourceLine}"]`);
+            if (lineDiv) {
+                lineDiv.classList.add('current-line-highlight');
+            }
+        }
+    }
+
+    searchMemory() {
+        const searchInput = document.getElementById('memorySearchInput');
+        if (!searchInput) return;
+        
+        const searchTerm = searchInput.value.trim();
+        if (!searchTerm) return;
+        
+        this.memorySearchResults = [];
+        this.memorySearchIndex = 0;
+        
+        // Search in memory values and addresses
+        const dump = this.memory.dump(0, 1000); // Search first 1000 locations
+        
+        for (const entry of dump) {
+            const addressMatch = entry.address.includes(searchTerm);
+            const valueMatch = entry.value.includes(searchTerm);
+            const decimalMatch = entry.decimal.toString().includes(searchTerm);
+            
+            if (addressMatch || valueMatch || decimalMatch) {
+                this.memorySearchResults.push({
+                    address: entry.address,
+                    reason: addressMatch ? 'address' : valueMatch ? 'value' : 'decimal'
+                });
+            }
+        }
+        
+        if (this.memorySearchResults.length > 0) {
+            this.highlightSearchResult(0);
+            this.showMessage(`Found ${this.memorySearchResults.length} results`, 'info');
+        } else {
+            this.showMessage('No results found', 'info');
+        }
+    }
+
+    searchMemoryNext() {
+        if (this.memorySearchResults.length === 0) return;
+        
+        this.memorySearchIndex = (this.memorySearchIndex + 1) % this.memorySearchResults.length;
+        this.highlightSearchResult(this.memorySearchIndex);
+    }
+
+    searchMemoryPrev() {
+        if (this.memorySearchResults.length === 0) return;
+        
+        this.memorySearchIndex = this.memorySearchIndex === 0 ? 
+            this.memorySearchResults.length - 1 : this.memorySearchIndex - 1;
+        this.highlightSearchResult(this.memorySearchIndex);
+    }
+
+    highlightSearchResult(index) {
+        if (index < 0 || index >= this.memorySearchResults.length) return;
+        
+        const result = this.memorySearchResults[index];
+        
+        // Clear previous highlights
+        document.querySelectorAll('.memory-search-result').forEach(el => 
+            el.classList.remove('memory-search-result'));
+        
+        // Navigate to the page containing this address
+        const addr = new TernaryAddress(result.address, 9);
+        const addressDecimal = addr.toDecimal();
+        const pageSize = parseInt(document.getElementById('memoryPageSize')?.value || '16');
+        const page = Math.floor(addressDecimal / pageSize);
+        
+        document.getElementById('memoryPage').value = page;
+        this.updateMemoryDisplay();
+        
+        // Highlight the result after a short delay to ensure DOM is updated
+        setTimeout(() => {
+            const memoryCell = document.querySelector(`[data-address="${result.address}"]`);
+            if (memoryCell) {
+                memoryCell.classList.add('memory-search-result');
+                memoryCell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 100);
+    }
+
+    updateStackDisplay() {
+        const stackDisplay = document.getElementById('stackDisplay');
+        const stackDepthInput = document.getElementById('stackDepth');
+        
+        if (!stackDisplay || !stackDepthInput) return;
+        
+        const depth = parseInt(stackDepthInput.value) || 10;
+        const sp = this.cpu.registers.get('sp');
+        const spDecimal = sp.toDecimal();
+        
+        let html = '';
+        
+        for (let i = 0; i < depth; i++) {
+            const address = new TernaryAddress(spDecimal + i, 9);
+            const value = this.memory.read(address);
+            const isSP = i === 0;
+            
+            html += `
+                <div class="stack-entry ${isSP ? 'stack-sp-pointer' : ''}">
+                    <span class="stack-address">${address.toString()}</span>
+                    <span class="stack-value">${value.toString()} (${value.toDecimal()})</span>
+                    ${isSP ? '<span style="color: #ffff00;"> ← SP</span>' : ''}
+                </div>
+            `;
+        }
+        
+        stackDisplay.innerHTML = html || '<div style="color: #888;">Stack empty</div>';
+    }
+
+    resetProfiler() {
+        this.instructionFrequency.clear();
+        this.startTime = Date.now();
+        this.updateProfilerDisplay();
+        this.showMessage('Profiler reset', 'info');
+    }
+
+    toggleProfiling() {
+        this.isProfilingEnabled = !this.isProfilingEnabled;
+        const button = document.getElementById('toggleProfilingBtn');
+        
+        if (button) {
+            button.textContent = this.isProfilingEnabled ? 'Stop Profiling' : 'Start Profiling';
+            button.classList.toggle('active', this.isProfilingEnabled);
+        }
+        
+        this.showMessage(`Profiling ${this.isProfilingEnabled ? 'started' : 'stopped'}`, 'info');
+    }
+
+    updateProfilerDisplay() {
+        const instrCountElement = document.getElementById('instrCount');
+        const cyclesPerSecElement = document.getElementById('cyclesPerSec');
+        const mostUsedInstrElement = document.getElementById('mostUsedInstr');
+        const frequencyChart = document.getElementById('instrFrequency');
+        
+        if (!instrCountElement || !cyclesPerSecElement || !mostUsedInstrElement || !frequencyChart) return;
+        
+        const totalInstructions = Array.from(this.instructionFrequency.values()).reduce((a, b) => a + b, 0);
+        const elapsedSeconds = (Date.now() - this.startTime) / 1000;
+        const cyclesPerSec = elapsedSeconds > 0 ? (this.cpu.cycleCount / elapsedSeconds).toFixed(1) : '0';
+        
+        instrCountElement.textContent = totalInstructions;
+        cyclesPerSecElement.textContent = cyclesPerSec;
+        
+        // Find most used instruction
+        let mostUsed = 'None';
+        let maxCount = 0;
+        for (const [instr, count] of this.instructionFrequency.entries()) {
+            if (count > maxCount) {
+                maxCount = count;
+                mostUsed = instr;
+            }
+        }
+        mostUsedInstrElement.textContent = `${mostUsed} (${maxCount})`;
+        
+        // Update frequency chart
+        let chartHtml = '';
+        const sortedFreq = Array.from(this.instructionFrequency.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10); // Top 10
+        
+        const maxFreq = sortedFreq.length > 0 ? sortedFreq[0][1] : 1;
+        
+        for (const [instr, count] of sortedFreq) {
+            const percentage = (count / maxFreq) * 100;
+            chartHtml += `
+                <div class="frequency-bar">
+                    <span class="frequency-name">${instr}</span>
+                    <div class="frequency-visual" style="width: ${percentage}%"></div>
+                    <span class="frequency-count">${count}</span>
+                </div>
+            `;
+        }
+        
+        frequencyChart.innerHTML = chartHtml || '<div style="color: #888;">No data</div>';
+    }
+
+    recordInstructionExecution(instruction) {
+        if (!this.isProfilingEnabled) return;
+        
+        // Decode instruction to get opcode name
+        const opcode = instruction.toDecimal() >> 3; // Get upper 3 trits as opcode
+        const opcodes = Object.keys(this.assembler.opcodes);
+        const instrName = opcodes.find(name => this.assembler.opcodes[name] === opcode) || 'UNKNOWN';
+        
+        this.instructionFrequency.set(instrName, (this.instructionFrequency.get(instrName) || 0) + 1);
+        this.updateProfilerDisplay();
     }
 }
 
