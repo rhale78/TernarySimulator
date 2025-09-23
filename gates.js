@@ -333,12 +333,15 @@ class TernaryFlipFlop {
     process(data, clock, enable = true) {
         if (!enable) return this.state;
         
-        // Detect ternary clock edges: 0->1 (positive) or 0->-1 (negative)
-        const positiveEdge = (this.lastClock === 0 && clock === 1);
-        const negativeEdge = (this.lastClock === 0 && clock === -1);
+        // Enhanced ternary clock edge detection based on new pattern
+        // Trigger on: 0->1 (positive rising), 0->-1 (negative falling), -1->0 (negative rising)
+        const positiveRisingEdge = (this.lastClock === 0 && clock === 1);
+        const negativeFallingEdge = (this.lastClock === 0 && clock === -1);
+        const negativeRisingEdge = (this.lastClock === -1 && clock === 0);
+        
         this.lastClock = clock;
         
-        if (positiveEdge || negativeEdge) {
+        if (positiveRisingEdge || negativeFallingEdge || negativeRisingEdge) {
             this.enabled = true;
             if (data !== -1 && data !== 0 && data !== 1) {
                 throw new Error(`Invalid ternary value: ${data}`);

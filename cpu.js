@@ -387,7 +387,19 @@ class TernaryCPU {
             // Timer/Clock instructions (new)
             'CLKR': { opcode: 60, execute: this.clockRead.bind(this) },          // Read clock
             'CLKS': { opcode: 61, execute: this.clockSet.bind(this) },           // Set timer
-            'WAIT': { opcode: 62, execute: this.waitTimer.bind(this) }           // Wait for timer
+            'WAIT': { opcode: 62, execute: this.waitTimer.bind(this) },          // Wait for timer
+            
+            // Edge detection instructions
+            'TEDG': { opcode: 63, execute: this.ternaryEdgeDetect.bind(this) },  // Ternary edge detect
+            'BEDG': { opcode: 64, execute: this.binaryEdgeDetect.bind(this) },   // Binary edge detect
+            
+            // Hardware timer management
+            'TCRT': { opcode: 65, execute: this.timerCreate.bind(this) },        // Create hardware timer
+            'TDEL': { opcode: 66, execute: this.timerDelete.bind(this) },        // Delete hardware timer
+            'TSET': { opcode: 67, execute: this.timerSet.bind(this) },           // Set timer preset
+            'TSTA': { opcode: 68, execute: this.timerStart.bind(this) },         // Start timer
+            'TSTP': { opcode: 69, execute: this.timerStop.bind(this) },          // Stop timer
+            'TSTS': { opcode: 70, execute: this.timerStatus.bind(this) }         // Get timer status
         };
     }
 
@@ -644,6 +656,127 @@ class TernaryCPU {
                 this.alu.updateFlags(this.alu.lastResult);
             }
             this.registers.set('flags', this.alu.getFlagsAsTrits());
+        }
+    }
+
+    // Edge detection instructions
+    ternaryEdgeDetect(operand) {
+        // Read ternary clock edge status into accumulator
+        // operand: 0=rising, 1=falling, 2=positive, 3=negative, 4=pos_falling, 5=neg_falling, 6=neg_rising
+        const ternaryClock = this.clockManager.getTernaryClock();
+        let edgeStatus = 0;
+        
+        switch (operand) {
+            case 0: edgeStatus = ternaryClock.isRisingEdge() ? 1 : 0; break;
+            case 1: edgeStatus = ternaryClock.isFallingEdge() ? 1 : 0; break;
+            case 2: edgeStatus = ternaryClock.isPositiveEdge() ? 1 : 0; break;
+            case 3: edgeStatus = ternaryClock.isNegativeEdge() ? 1 : 0; break;
+            case 4: edgeStatus = ternaryClock.isPositiveFallingEdge() ? 1 : 0; break;
+            case 5: edgeStatus = ternaryClock.isNegativeFallingEdge() ? 1 : 0; break;
+            case 6: edgeStatus = ternaryClock.isNegativeRisingEdge() ? 1 : 0; break;
+            default: edgeStatus = 0;
+        }
+        
+        this.registers.set('acc', new Tryte(edgeStatus));
+    }
+
+    binaryEdgeDetect(operand) {
+        // Read binary clock edge status into accumulator
+        // operand: 0=rising, 1=falling
+        const binaryClock = this.clockManager.getBinaryClock();
+        let edgeStatus = 0;
+        
+        switch (operand) {
+            case 0: edgeStatus = binaryClock.isRisingEdge() ? 1 : 0; break;
+            case 1: edgeStatus = binaryClock.isFallingEdge() ? 1 : 0; break;
+            default: edgeStatus = 0;
+        }
+        
+        this.registers.set('acc', new Tryte(edgeStatus));
+    }
+
+    // Hardware timer management instructions
+    timerCreate(operand) {
+        // Create hardware timer: operand 0=binary, 1=ternary
+        try {
+            const clockType = operand === 1 ? 'ternary' : 'binary';
+            const frequency = this.registers.get('acc').toDecimal(); // Get frequency from accumulator
+            const timerId = this.clockManager.createTimer(clockType, frequency);
+            this.registers.set('acc', new Tryte(timerId));
+        } catch (error) {
+            // Set accumulator to -1 on error
+            this.registers.set('acc', new Tryte(-1));
+        }
+    }
+
+    timerDelete(operand) {
+        // Delete hardware timer: operand = timer ID or from accumulator if operand not specified
+        const timerId = operand !== undefined ? operand : this.registers.get('acc').toDecimal();
+        const success = this.clockManager.removeTimer(timerId);
+        this.registers.set('acc', new Tryte(success ? 1 : 0));
+    }
+
+    timerSet(operand) {
+        // Set timer preset value: timer ID from operand, preset from accumulator
+        const timerId = operand;
+        const preset = this.registers.get('acc').toDecimal();
+        const timer = this.clockManager.getTimer(timerId);
+        
+        if (timer) {
+            timer.setPreset(preset);
+            this.registers.set('acc', new Tryte(1)); // Success
+        } else {
+            this.registers.set('acc', new Tryte(0)); // Failure
+        }
+    }
+
+    timerStart(operand) {
+        // Start hardware timer: timer ID from operand
+        const timerId = operand;
+        const timer = this.clockManager.getTimer(timerId);
+        
+        if (timer) {
+            timer.start();
+            this.registers.set('acc', new Tryte(1)); // Success
+        } else {
+            this.registers.set('acc', new Tryte(0)); // Failure
+        }
+    }
+
+    timerStop(operand) {
+        // Stop hardware timer: timer ID from operand
+        const timerId = operand;
+        const timer = this.clockManager.getTimer(timerId);
+        
+        if (timer) {
+            timer.stop();
+            this.registers.set('acc', new Tryte(1)); // Success
+        } else {
+            this.registers.set('acc', new Tryte(0)); // Failure
+        }
+    }
+
+    timerStatus(operand) {
+        // Get timer status: timer ID from operand, returns counter value in accumulator
+        const timerId = operand;
+        const timer = this.clockManager.getTimer(timerId);
+        
+        if (timer) {
+            const counter = timer.getCounter();
+            this.registers.set('acc', new Tryte(counter));
+            
+            // Set flags based on timer state
+            if (timer.hasOverflow()) {
+                this.alu.lastResult = new Tryte(0); // Zero flag for overflow
+            } else if (timer.isRunning()) {
+                this.alu.lastResult = new Tryte(1); // Positive flag for running
+            } else {
+                this.alu.lastResult = new Tryte(-1); // Negative flag for stopped
+            }
+            this.alu.updateFlags(this.alu.lastResult);
+            this.registers.set('flags', this.alu.getFlagsAsTrits());
+        } else {
+            this.registers.set('acc', new Tryte(-1)); // Error value
         }
     }
 
