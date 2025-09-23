@@ -32,10 +32,24 @@
                 <div class="memory-section">
                     <h3>Memory View</h3>
                     <div class="memory-controls">
-                        <label>Start Address: <input type="text" id="memoryStart" value="000000000" maxlength="9"></label>
+                        <label>Page: <input type="number" id="memoryPage" value="0" min="0" style="width: 60px;"></label>
+                        <label>Page Size: 
+                            <select id="memoryPageSize">
+                                <option value="16" selected>16</option>
+                                <option value="32">32</option>
+                                <option value="64">64</option>
+                            </select>
+                        </label>
+                        <button id="memoryPrevBtn">◀ Prev</button>
+                        <button id="memoryNextBtn">Next ▶</button>
                         <button id="refreshMemoryBtn">Refresh</button>
                     </div>
                     <div id="memoryDisplay" class="memory-display"></div>
+                    
+                    <div class="memory-changes">
+                        <h4>Recent Memory Changes</h4>
+                        <div id="memoryChanges" class="memory-changes-display"></div>
+                    </div>
                 </div>
             </div>
             

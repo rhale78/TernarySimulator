@@ -46,11 +46,22 @@ class TernarySimulator {
         
         // Memory controls
         document.getElementById('refreshMemoryBtn')?.addEventListener('click', () => this.updateMemoryDisplay());
+        document.getElementById('memoryPrevBtn')?.addEventListener('click', () => this.previousMemoryPage());
+        document.getElementById('memoryNextBtn')?.addEventListener('click', () => this.nextMemoryPage());
         
-        // Memory start address input
-        const memoryStartInput = document.getElementById('memoryStart');
-        if (memoryStartInput) {
-            memoryStartInput.addEventListener('change', () => this.updateMemoryDisplay());
+        // Memory page controls
+        const memoryPageInput = document.getElementById('memoryPage');
+        const memoryPageSizeSelect = document.getElementById('memoryPageSize');
+        
+        if (memoryPageInput) {
+            memoryPageInput.addEventListener('change', () => this.updateMemoryDisplay());
+        }
+        
+        if (memoryPageSizeSelect) {
+            memoryPageSizeSelect.addEventListener('change', () => {
+                this.memory.pageSize = parseInt(memoryPageSizeSelect.value);
+                this.updateMemoryDisplay();
+            });
         }
     }
 
@@ -162,12 +173,30 @@ class TernarySimulator {
 
     reset() {
         this.pause();
+        
+        // Reset CPU registers but preserve memory program
+        this.cpu.reset();
+        
+        // Clear only graphics and I/O, not program memory
+        this.clearGraphics();
+        
+        // Clear change history for clean slate
+        this.memory.clearChangeHistory();
+        
+        this.updateDisplay();
+        this.updateMemoryDisplay();
+        this.showMessage('System reset (program memory preserved)', 'info');
+    }
+
+    // Full reset that clears everything including program memory
+    fullReset() {
+        this.pause();
         this.cpu.reset();
         this.memory.clear();
         this.clearGraphics();
         this.updateDisplay();
         this.updateMemoryDisplay();
-        this.showMessage('System reset', 'info');
+        this.showMessage('Full system reset', 'info');
     }
 
     // Display updates
@@ -252,33 +281,113 @@ class TernarySimulator {
 
     updateMemoryDisplay() {
         const memoryDisplay = document.getElementById('memoryDisplay');
-        const startAddrInput = document.getElementById('memoryStart');
+        const memoryChanges = document.getElementById('memoryChanges');
+        const pageInput = document.getElementById('memoryPage');
         
-        if (!memoryDisplay || !startAddrInput) return;
+        if (!memoryDisplay) return;
 
-        const startAddr = parseInt(startAddrInput.value) || 0;
-        const dump = this.memory.dump(startAddr, 16);
+        const page = parseInt(pageInput?.value) || 0;
+        const pagedDump = this.memory.getPagedDump(page);
         
+        // Create grid layout
         memoryDisplay.innerHTML = '';
+        const grid = document.createElement('div');
+        grid.className = 'memory-grid';
         
-        for (let entry of dump) {
-            const row = document.createElement('div');
-            row.className = 'memory-row';
+        for (let row of pagedDump.grid) {
+            for (let entry of row) {
+                const cell = document.createElement('div');
+                cell.className = 'memory-cell';
+                if (!entry.initialized) {
+                    cell.classList.add('uninitialized');
+                }
+                
+                // Address
+                const address = document.createElement('div');
+                address.className = 'memory-address';
+                address.textContent = entry.address;
+                
+                // Value in ternary
+                const value = document.createElement('div');
+                value.className = 'memory-value';
+                value.textContent = entry.value;
+                
+                // Decimal value
+                const decimal = document.createElement('div');
+                decimal.className = 'memory-decimal';
+                decimal.textContent = `(${entry.decimal})`;
+                
+                // Add hover tooltip for ternary representation
+                cell.title = `Address: ${entry.address}\nTernary: ${entry.value}\nDecimal: ${entry.decimal}`;
+                
+                cell.appendChild(address);
+                cell.appendChild(value);
+                cell.appendChild(decimal);
+                grid.appendChild(cell);
+            }
+        }
+        
+        memoryDisplay.appendChild(grid);
+        
+        // Update memory changes display
+        if (memoryChanges) {
+            this.updateMemoryChanges();
+        }
+    }
+
+    updateMemoryChanges() {
+        const memoryChanges = document.getElementById('memoryChanges');
+        if (!memoryChanges) return;
+        
+        const changes = this.memory.getChangeHistory(10);
+        memoryChanges.innerHTML = '';
+        
+        if (changes.length === 0) {
+            memoryChanges.innerHTML = '<div style="color: #888; text-align: center;">No recent changes</div>';
+            return;
+        }
+        
+        for (let change of changes.reverse()) {
+            const changeDiv = document.createElement('div');
+            changeDiv.className = 'memory-change';
             
             const address = document.createElement('span');
-            address.className = 'memory-address';
-            address.textContent = entry.address;
+            address.className = 'change-address';
+            address.textContent = change.address;
             
-            const value = document.createElement('span');
-            value.className = 'memory-value';
-            if (!entry.initialized) {
-                value.classList.add('uninitialized');
+            const values = document.createElement('span');
+            values.className = 'change-values';
+            values.innerHTML = `<span class="change-old">${change.oldValue}</span> → <span class="change-new">${change.newValue}</span>`;
+            
+            const time = document.createElement('span');
+            time.className = 'change-time';
+            const timeAgo = Date.now() - change.timestamp;
+            time.textContent = timeAgo < 1000 ? 'now' : `${Math.floor(timeAgo/1000)}s`;
+            
+            changeDiv.appendChild(address);
+            changeDiv.appendChild(values);
+            changeDiv.appendChild(time);
+            memoryChanges.appendChild(changeDiv);
+        }
+    }
+
+    previousMemoryPage() {
+        const pageInput = document.getElementById('memoryPage');
+        if (pageInput) {
+            const currentPage = parseInt(pageInput.value) || 0;
+            if (currentPage > 0) {
+                pageInput.value = currentPage - 1;
+                this.updateMemoryDisplay();
             }
-            value.textContent = `${entry.value} (${entry.decimal})`;
-            
-            row.appendChild(address);
-            row.appendChild(value);
-            memoryDisplay.appendChild(row);
+        }
+    }
+
+    nextMemoryPage() {
+        const pageInput = document.getElementById('memoryPage');
+        if (pageInput) {
+            const currentPage = parseInt(pageInput.value) || 0;
+            pageInput.value = currentPage + 1;
+            this.updateMemoryDisplay();
         }
     }
 
