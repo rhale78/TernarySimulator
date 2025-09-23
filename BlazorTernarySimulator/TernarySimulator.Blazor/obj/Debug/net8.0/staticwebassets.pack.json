@@ -1,0 +1,41 @@
+{
+  "Files": [
+    {
+      "Id": "/home/runner/work/TernarySimulator/TernarySimulator/BlazorTernarySimulator/TernarySimulator.Blazor/obj/Debug/net8.0/scopedcss/projectbundle/TernarySimulator.Blazor.bundle.scp.css",
+      "PackagePath": "staticwebassets/TernarySimulator.Blazor.bundle.scp.css"
+    },
+    {
+      "Id": "/home/runner/work/TernarySimulator/TernarySimulator/BlazorTernarySimulator/TernarySimulator.Blazor/wwwroot/app.css",
+      "PackagePath": "staticwebassets/app.css"
+    },
+    {
+      "Id": "/home/runner/work/TernarySimulator/TernarySimulator/BlazorTernarySimulator/TernarySimulator.Blazor/wwwroot/bootstrap/bootstrap.min.css",
+      "PackagePath": "staticwebassets/bootstrap/bootstrap.min.css"
+    },
+    {
+      "Id": "/home/runner/work/TernarySimulator/TernarySimulator/BlazorTernarySimulator/TernarySimulator.Blazor/wwwroot/bootstrap/bootstrap.min.css.map",
+      "PackagePath": "staticwebassets/bootstrap/bootstrap.min.css.map"
+    },
+    {
+      "Id": "/home/runner/work/TernarySimulator/TernarySimulator/BlazorTernarySimulator/TernarySimulator.Blazor/wwwroot/favicon.png",
+      "PackagePath": "staticwebassets/favicon.png"
+    },
+    {
+      "Id": "obj/Debug/net8.0/staticwebassets/msbuild.TernarySimulator.Blazor.Microsoft.AspNetCore.StaticWebAssets.props",
+      "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
+    },
+    {
+      "Id": "obj/Debug/net8.0/staticwebassets/msbuild.build.TernarySimulator.Blazor.props",
+      "PackagePath": "build\\TernarySimulator.Blazor.props"
+    },
+    {
+      "Id": "obj/Debug/net8.0/staticwebassets/msbuild.buildMultiTargeting.TernarySimulator.Blazor.props",
+      "PackagePath": "buildMultiTargeting\\TernarySimulator.Blazor.props"
+    },
+    {
+      "Id": "obj/Debug/net8.0/staticwebassets/msbuild.buildTransitive.TernarySimulator.Blazor.props",
+      "PackagePath": "buildTransitive\\TernarySimulator.Blazor.props"
+    }
+  ],
+  "ElementsToRemove": []
+}

@@ -1,0 +1,298 @@
+﻿@page "/"
+@using TernarySimulator.Blazor.Core
+@inject TernarySimulator.Blazor.Core.TernarySimulatorCore Simulator
+@implements IDisposable
+@rendermode InteractiveServer
+
+<PageTitle>Balanced Ternary CPU Simulator</PageTitle>
+
+<div class="container-fluid">
+    <header class="mb-4">
+        <h1 class="text-center">Balanced Ternary CPU Simulator (C# Blazor)</h1>
+        <div class="controls text-center">
+            <button class="btn btn-success" @onclick="RunProgram" disabled="@Simulator.CPU.Running">▶️ Run</button>
+            <button class="btn btn-warning" @onclick="StepProgram" disabled="@Simulator.CPU.Running">⏯️ Step</button>
+            <button class="btn btn-secondary" @onclick="ResetSimulator">🔄 Reset</button>
+            <button class="btn btn-danger" @onclick="PauseProgram" disabled="@(!Simulator.CPU.Running)">⏸️ Pause</button>
+        </div>
+    </header>
+
+    <div class="row">
+        <!-- Left Panel -->
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>Program Editor</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <button class="btn btn-primary btn-sm" @onclick="AssembleProgram">🔧 Assemble</button>
+                        <button class="btn btn-info btn-sm" @onclick="LoadExample">📄 Load Example</button>
+                        <button class="btn btn-secondary btn-sm" @onclick="LoadLoopExample">🔄 Load Loop Example</button>
+                    </div>
+                    <textarea class="form-control font-monospace" rows="12" @bind="sourceCode" @bind:event="oninput"></textarea>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5>Memory View</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label>Page: <input type="number" class="form-control d-inline w-auto" @bind="memoryPage" min="0" style="width: 80px;" /></label>
+                        <button class="btn btn-sm btn-outline-primary ms-2" @onclick="RefreshMemory">🔄 Refresh</button>
+                    </div>
+                    <div class="memory-view font-monospace small">
+                        @if (memoryData != null)
+                        {
+                            <table class="table table-sm table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Address</th>
+                                        <th>Ternary</th>
+                                        <th>Decimal</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var cell in memoryData)
+                                    {
+                                        <tr class="@(cell.RecentlyChanged ? "table-warning" : "")">
+                                            <td>@cell.AddressString</td>
+                                            <td>@cell.ValueString</td>
+                                            <td>@cell.DecimalValue</td>
+                                            <td>
+                                                @if (cell.HasWatchpoint) { <span class="badge bg-danger">W</span> }
+                                                @if (cell.RecentlyChanged) { <span class="badge bg-warning">*</span> }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>CPU State</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col">
+                            <h6>Registers</h6>
+                            <table class="table table-sm font-monospace">
+                                @if (cpuState?.Registers != null)
+                                {
+                                    @foreach (var reg in cpuState.Registers)
+                                    {
+                                        var regInfo = (RegisterInfo)reg.Value;
+                                        <tr>
+                                            <td><strong>@reg.Key</strong></td>
+                                            <td>@regInfo.TernaryString</td>
+                                            <td>(@regInfo.DecimalValue)</td>
+                                        </tr>
+                                    }
+                                }
+                            </table>
+                        </div>
+                        <div class="col">
+                            <h6>Flags</h6>
+                            <table class="table table-sm font-monospace">
+                                @if (cpuState?.Flags != null)
+                                {
+                                    @foreach (var flag in cpuState.Flags)
+                                    {
+                                        var flagInfo = (FlagInfo)flag.Value;
+                                        <tr>
+                                            <td><strong>@flag.Key</strong></td>
+                                            <td class="@(flagInfo.Value ? "text-success fw-bold" : "text-muted")">@flagInfo.DisplayValue</td>
+                                        </tr>
+                                    }
+                                }
+                            </table>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <small>
+                            Status: <span class="@(cpuState?.Halted == true ? "text-danger" : cpuState?.Running == true ? "text-success" : "text-warning")">
+                                @(cpuState?.Halted == true ? "HALTED" : cpuState?.Running == true ? "RUNNING" : "READY")
+                            </span> | 
+                            Cycles: <strong>@(cpuState?.CycleCount ?? 0)</strong>
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>Console Output</h5>
+                </div>
+                <div class="card-body">
+                    <div class="console-output bg-dark text-light p-2 font-monospace" style="height: 150px; overflow-y: auto;">
+                        @((MarkupString)consoleOutput.Replace("\n", "<br/>"))
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary mt-2" @onclick="ClearConsole">Clear Console</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5>Messages</h5>
+                </div>
+                <div class="card-body">
+                    <div class="messages" style="height: 120px; overflow-y: auto;">
+                        @foreach (var message in messages.TakeLast(10))
+                        {
+                            <div class="small text-muted mb-1">@message</div>
+                        }
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="ClearMessages">Clear Messages</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string sourceCode = "";
+    private string consoleOutput = "";
+    private List<string> messages = new();
+    private int memoryPage = 0;
+    private List<MemoryCell>? memoryData;
+    private CPUState? cpuState;
+
+    protected override void OnInitialized()
+    {
+        // Load default example program
+        LoadExample();
+
+        // Subscribe to simulator events
+        Simulator.OnConsoleOutput += OnConsoleOutput;
+        Simulator.OnMessage += OnMessage;
+        Simulator.OnStateChanged += OnStateChanged;
+
+        // Initial state refresh
+        RefreshState();
+    }
+
+    private void AssembleProgram()
+    {
+        var result = Simulator.AssembleAndLoad(sourceCode);
+        if (result.Success)
+        {
+            AddMessage($"✅ Assembly successful! Generated {result.Instructions.Count} instructions.");
+        }
+        else
+        {
+            AddMessage($"❌ Assembly failed: {result.Message}");
+        }
+        RefreshState();
+    }
+
+    private void RunProgram()
+    {
+        Simulator.Run();
+        RefreshState();
+    }
+
+    private void StepProgram()
+    {
+        Simulator.Step();
+        RefreshState();
+    }
+
+    private void PauseProgram()
+    {
+        Simulator.Pause();
+        RefreshState();
+    }
+
+    private void ResetSimulator()
+    {
+        Simulator.Reset();
+        RefreshState();
+        AddMessage("🔄 Simulator reset.");
+    }
+
+    private void LoadExample()
+    {
+        sourceCode = TernaryAssembler.GetExampleProgram();
+        AddMessage("📄 Loaded example program.");
+    }
+
+    private void LoadLoopExample()
+    {
+        sourceCode = TernaryAssembler.GetLoopExampleProgram();
+        AddMessage("🔄 Loaded loop example program.");
+    }
+
+    private void RefreshMemory()
+    {
+        memoryData = Simulator.Memory.GetPage(memoryPage);
+        StateHasChanged();
+    }
+
+    private void RefreshState()
+    {
+        var state = Simulator.GetState();
+        cpuState = state.CPU;
+        memoryData = state.Memory.CurrentPage;
+        StateHasChanged();
+    }
+
+    private void OnConsoleOutput(string text)
+    {
+        consoleOutput += text;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnMessage(string message)
+    {
+        AddMessage(message);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnStateChanged()
+    {
+        InvokeAsync(() =>
+        {
+            RefreshState();
+            StateHasChanged();
+        });
+    }
+
+    private void AddMessage(string message)
+    {
+        messages.Add($"[{DateTime.Now:HH:mm:ss}] {message}");
+        if (messages.Count > 100)
+        {
+            messages.RemoveRange(0, messages.Count - 100);
+        }
+    }
+
+    private void ClearConsole()
+    {
+        consoleOutput = "";
+        StateHasChanged();
+    }
+
+    private void ClearMessages()
+    {
+        messages.Clear();
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        // Unsubscribe from events
+        Simulator.OnConsoleOutput -= OnConsoleOutput;
+        Simulator.OnMessage -= OnMessage;
+        Simulator.OnStateChanged -= OnStateChanged;
+    }
+}
