@@ -220,8 +220,60 @@
                         <div id="consoleOutput" class="console-output"></div>
                     </div>
                     <div class="graphics">
-                        <h4>Graphics Display (24x16)</h4>
+                        <h4>Character Display (24x16)</h4>
                         <canvas id="graphicsDisplay" width="240" height="160"></canvas>
+                    </div>
+                    <div class="ternary-graphics">
+                        <h4>Ternary Graphics (81x81 - 9 colors)</h4>
+                        <canvas id="ternaryGraphicsDisplay" width="324" height="324"></canvas>
+                        <div class="graphics-info">
+                            <div>Pixel Size: 4x4</div>
+                            <div>Colors: 9 ternary combinations</div>
+                            <div>Memory: 6561 pixels</div>
+                        </div>
+                    </div>
+                    <div class="disk-drive">
+                        <h4>Virtual Disk Drive</h4>
+                        <div class="disk-status">
+                            <div>Status: <span id="diskStatus">Ready</span></div>
+                            <div>Files: <span id="diskFiles">0</span>/<span id="diskMaxFiles">243</span></div>
+                            <div>Used: <span id="diskUsage">0%</span></div>
+                        </div>
+                        <div class="disk-controls">
+                            <button id="diskListBtn">List Files</button>
+                            <button id="diskStatsBtn">Show Stats</button>
+                        </div>
+                        <div id="diskOutput" class="disk-output"></div>
+                    </div>
+                    <div class="dma-controller">
+                        <h4>DMA Controller</h4>
+                        <div class="dma-status">
+                            <div>Status: <span id="dmaStatus">Ready</span></div>
+                            <div>Active Channels: <span id="dmaActiveChannels">0</span>/9</div>
+                            <div>Total Transfers: <span id="dmaTotalTransfers">0</span></div>
+                            <div>Efficiency: <span id="dmaEfficiency">0%</span></div>
+                        </div>
+                        <div class="dma-controls">
+                            <button id="dmaShowChannelsBtn">Show Channels</button>
+                            <button id="dmaStatsBtn">Show Stats</button>
+                            <button id="dmaTestBtn">Test Transfer</button>
+                        </div>
+                        <div id="dmaOutput" class="dma-output"></div>
+                    </div>
+                    <div class="cache-system">
+                        <h4>Cache Memory System</h4>
+                        <div class="cache-status">
+                            <div>L1 Hit Rate: <span id="l1HitRate">0%</span></div>
+                            <div>L2 Hit Rate: <span id="l2HitRate">0%</span></div>
+                            <div>Total Accesses: <span id="cacheAccesses">0</span></div>
+                            <div>Memory Hit Rate: <span id="memoryHitRate">0%</span></div>
+                        </div>
+                        <div class="cache-controls">
+                            <button id="cacheStatsBtn">Show Stats</button>
+                            <button id="cacheBenchmarkBtn">Benchmark</button>
+                            <button id="cacheFlushBtn">Flush All</button>
+                        </div>
+                        <div id="cacheOutput" class="cache-output"></div>
                     </div>
                 </div>
             </div>
@@ -272,6 +324,10 @@
     <script src="microcode.js"></script>
     <script src="interrupts.js"></script>
     <script src="ternary.js"></script>
+    <script src="graphics.js"></script>
+    <script src="disk.js"></script>
+    <script src="dma.js"></script>
+    <script src="cache.js"></script>
     <script src="cpu.js"></script>
     <script src="memory.js"></script>
     <script src="assembler.js"></script>

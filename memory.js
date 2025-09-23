@@ -56,7 +56,19 @@ class TernaryMemory {
             timestamp: Date.now()
         });
 
-        // Return stored value or zero if not initialized
+        // Use cache system if available (set by simulator)
+        if (this.cacheSystem) {
+            const value = this.cacheSystem.read(address);
+            
+            // Check watchpoints
+            if (this.watchpoints.has(key)) {
+                console.log(`Memory watchpoint hit: READ from ${key} = ${value.toString()} (via cache)`);
+            }
+            
+            return value;
+        }
+
+        // Direct memory access (fallback)
         const stored = this.memory.get(key);
         const value = stored ? new Tryte(stored.trits) : new Tryte(0);
         
@@ -103,13 +115,39 @@ class TernaryMemory {
             timestamp: Date.now()
         });
 
-        // Store the value
+        // Use cache system if available (set by simulator)
+        if (this.cacheSystem) {
+            this.cacheSystem.write(address, tryte);
+            
+            // Check watchpoints
+            if (this.watchpoints.has(key)) {
+                console.log(`Memory watchpoint hit: WRITE to ${key} = ${tryte.toString()} (via cache)`);
+            }
+            return;
+        }
+
+        // Direct memory access (fallback)
         this.memory.set(key, tryte);
         
         // Check watchpoints
         if (this.watchpoints.has(key)) {
             console.log(`Memory watchpoint hit: WRITE to ${key} = ${tryte.toString()}`);
         }
+    }
+
+    // Direct memory access methods (for cache system use)
+    directRead(address) {
+        const addr = this.validateAddress(address);
+        const key = addr.toString();
+        const stored = this.memory.get(key);
+        return stored ? new Tryte(stored.trits) : new Tryte(0);
+    }
+
+    directWrite(address, value) {
+        const addr = this.validateAddress(address);
+        const key = addr.toString();
+        const tryte = value instanceof Tryte ? new Tryte(value.trits) : new Tryte(value);
+        this.memory.set(key, tryte);
     }
 
     // Read multiple trytes starting from address
@@ -284,11 +322,32 @@ class MemoryMappedIO {
             write: (value) => this.handleConsoleOutput(value)
         });
 
-        // Graphics memory (character mode)
-        this.defineRegion(maxAddr - 50, maxAddr - 11, {
-            name: 'graphics',
+        // Character graphics memory (legacy character mode)
+        this.defineRegion(maxAddr - 100, maxAddr - 51, {
+            name: 'char_graphics',
             read: (addr) => this.handleGraphicsRead(addr),
             write: (addr, value) => this.handleGraphicsWrite(addr, value)
+        });
+
+        // Ternary graphics memory (pixel mode - 6561 pixels for 81x81 display)
+        this.defineRegion(maxAddr - 6661, maxAddr - 101, {
+            name: 'ternary_graphics',
+            read: (addr) => this.handleTernaryGraphicsRead(addr),
+            write: (addr, value) => this.handleTernaryGraphicsWrite(addr, value)
+        });
+
+        // Virtual disk drive I/O (50 addresses for disk operations)
+        this.defineRegion(maxAddr - 6711, maxAddr - 6662, {
+            name: 'disk_io',
+            read: (addr) => this.handleDiskRead(addr),
+            write: (addr, value) => this.handleDiskWrite(addr, value)
+        });
+
+        // DMA controller I/O (18 addresses for DMA operations)
+        this.defineRegion(maxAddr - 6729, maxAddr - 6712, {
+            name: 'dma_io',
+            read: (addr) => this.handleDMARead(addr),
+            write: (addr, value) => this.handleDMAWrite(addr, value)
         });
 
         // System control
@@ -362,6 +421,63 @@ class MemoryMappedIO {
     handleSystemWrite(address, value) {
         // System control
         console.log(`System control write: ${address.toString()} = ${value.toString()}`);
+    }
+
+    handleTernaryGraphicsRead(address) {
+        // Read pixel data from ternary graphics display
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.ternaryGraphics) {
+            const maxAddr = this.memory.maxAddress;
+            const graphicsAddr = address.toDecimal() - (maxAddr - 6661);
+            return window.simulator.ternaryGraphics.readPixelAsTryte(graphicsAddr);
+        }
+        return new Tryte(0);
+    }
+
+    handleTernaryGraphicsWrite(address, value) {
+        // Write pixel data to ternary graphics display
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.ternaryGraphics) {
+            const maxAddr = this.memory.maxAddress;
+            const graphicsAddr = address.toDecimal() - (maxAddr - 6661);
+            window.simulator.ternaryGraphics.writePixelFromTryte(graphicsAddr, value);
+        }
+    }
+
+    handleDiskRead(address) {
+        // Read from virtual disk drive
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.diskDrive) {
+            const maxAddr = this.memory.maxAddress;
+            const diskAddr = address.toDecimal() - (maxAddr - 6711);
+            return window.simulator.diskDrive.handleMemoryRead(diskAddr);
+        }
+        return new Tryte(0);
+    }
+
+    handleDiskWrite(address, value) {
+        // Write to virtual disk drive
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.diskDrive) {
+            const maxAddr = this.memory.maxAddress;
+            const diskAddr = address.toDecimal() - (maxAddr - 6711);
+            window.simulator.diskDrive.handleMemoryWrite(diskAddr, value);
+        }
+    }
+
+    handleDMARead(address) {
+        // Read from DMA controller
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.dmaController) {
+            const maxAddr = this.memory.maxAddress;
+            const dmaAddr = address.toDecimal() - (maxAddr - 6729);
+            return window.simulator.dmaController.handleMemoryRead(dmaAddr);
+        }
+        return new Tryte(0);
+    }
+
+    handleDMAWrite(address, value) {
+        // Write to DMA controller
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.dmaController) {
+            const maxAddr = this.memory.maxAddress;
+            const dmaAddr = address.toDecimal() - (maxAddr - 6729);
+            window.simulator.dmaController.handleMemoryWrite(dmaAddr, value);
+        }
     }
 
     // These methods would be implemented to interface with the actual display

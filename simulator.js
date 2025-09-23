@@ -30,6 +30,7 @@ class TernarySimulator {
         
         this.initializeUI();
         this.setupEventListeners();
+        this.setupDiskControls();
         this.updateDisplay();
     }
 
@@ -112,18 +113,54 @@ class TernarySimulator {
         this.updateLineNumbers();
     }
 
+    setupDiskControls() {
+        // Disk drive controls
+        document.getElementById('diskListBtn')?.addEventListener('click', () => this.listDiskFiles());
+        document.getElementById('diskStatsBtn')?.addEventListener('click', () => this.showDiskStats());
+        
+        // DMA controller controls
+        document.getElementById('dmaShowChannelsBtn')?.addEventListener('click', () => this.showDMAChannels());
+        document.getElementById('dmaStatsBtn')?.addEventListener('click', () => this.showDMAStats());
+        document.getElementById('dmaTestBtn')?.addEventListener('click', () => this.testDMATransfer());
+        
+        // Cache system controls
+        document.getElementById('cacheStatsBtn')?.addEventListener('click', () => this.showCacheStats());
+        document.getElementById('cacheBenchmarkBtn')?.addEventListener('click', () => this.benchmarkCache());
+        document.getElementById('cacheFlushBtn')?.addEventListener('click', () => this.flushCache());
+    }
+
     initializeGraphics() {
         const canvas = document.getElementById('graphicsDisplay');
         if (canvas) {
             this.graphicsContext = canvas.getContext('2d');
             this.clearGraphics();
         }
+        
+        // Initialize ternary graphics display
+        this.ternaryGraphics = new TernaryGraphicsDisplay(81, 81);
+        
+        // Initialize virtual disk drive
+        this.diskDrive = new VirtualDiskDrive();
+        
+        // Initialize DMA controller
+        this.dmaController = new DMAController(this.memory);
+        
+        // Initialize 2-layer cache system
+        this.cacheSystem = new TwoLevelCacheSystem(this.memory);
+        
+        // Connect cache system to memory for direct access
+        this.memory.cacheSystem = this.cacheSystem;
     }
 
     clearGraphics() {
         if (this.graphicsContext) {
             this.graphicsContext.fillStyle = '#000000';
             this.graphicsContext.fillRect(0, 0, 240, 160);
+        }
+        
+        // Clear ternary graphics
+        if (this.ternaryGraphics) {
+            this.ternaryGraphics.clear();
         }
     }
 
@@ -417,6 +454,14 @@ class TernarySimulator {
         this.updateALU();
         this.updateDebugInfo();
         this.updateSystemStatus();
+        this.updateDiskStatus();
+        this.updateDMAStatus();
+        this.updateCacheStatus();
+        
+        // Process DMA transfers
+        if (this.dmaController) {
+            this.dmaController.processDMATransfers();
+        }
     }
 
     updateRegisters() {
@@ -726,6 +771,248 @@ class TernarySimulator {
             messageDiv.style.opacity = '0';
             setTimeout(() => document.body.removeChild(messageDiv), 300);
         }, 3000);
+    }
+
+    // Disk drive interface
+    listDiskFiles() {
+        if (this.diskDrive) {
+            try {
+                const contents = this.diskDrive.listDirectory('/');
+                const output = document.getElementById('diskOutput');
+                if (output) {
+                    let listing = 'Files in /:\n';
+                    for (let item of contents) {
+                        const type = item.type === 'directory' ? 'DIR' : 'FILE';
+                        listing += `${type.padEnd(4)} ${item.name.padEnd(15)} ${item.size} bytes\n`;
+                    }
+                    output.textContent = listing;
+                }
+                this.updateDiskStatus();
+            } catch (error) {
+                this.showMessage(`Disk error: ${error.message}`, 'error');
+            }
+        }
+    }
+
+    showDiskStats() {
+        if (this.diskDrive) {
+            const stats = this.diskDrive.getStats();
+            const output = document.getElementById('diskOutput');
+            if (output) {
+                const statsText = `Disk Statistics:
+Total Files: ${stats.totalFiles}/${stats.maxFiles}
+Directories: ${stats.totalDirectories}
+Sectors: ${stats.usedSectors}/${stats.totalSectors}
+Utilization: ${stats.utilization}
+Sector Size: ${stats.sectorSize} trytes`;
+                output.textContent = statsText;
+            }
+            this.updateDiskStatus();
+        }
+    }
+
+    updateDiskStatus() {
+        if (this.diskDrive) {
+            const stats = this.diskDrive.getStats();
+            
+            document.getElementById('diskStatus').textContent = 
+                this.diskDrive.diskStatus === 0 ? 'Ready' : 
+                this.diskDrive.diskStatus === 1 ? 'Busy' : 'Error';
+                
+            document.getElementById('diskFiles').textContent = stats.totalFiles;
+            document.getElementById('diskMaxFiles').textContent = stats.maxFiles;
+            document.getElementById('diskUsage').textContent = stats.utilization;
+        }
+    }
+
+    // DMA controller interface
+    showDMAChannels() {
+        if (this.dmaController) {
+            try {
+                const channels = this.dmaController.getChannelStatuses();
+                const output = document.getElementById('dmaOutput');
+                if (output) {
+                    let listing = 'DMA Channels:\n';
+                    for (let channel of channels) {
+                        const status = channel.enabled ? (channel.busy ? 'BUSY' : 'READY') : 
+                                     channel.completed ? 'DONE' : channel.error ? 'ERROR' : 'IDLE';
+                        listing += `CH${channel.channelId}: ${status.padEnd(5)} ${channel.progress.padEnd(6)} P${channel.priority} ${channel.mode}\n`;
+                    }
+                    output.textContent = listing;
+                }
+                this.updateDMAStatus();
+            } catch (error) {
+                this.showMessage(`DMA error: ${error.message}`, 'error');
+            }
+        }
+    }
+
+    showDMAStats() {
+        if (this.dmaController) {
+            const stats = this.dmaController.getStats();
+            const output = document.getElementById('dmaOutput');
+            if (output) {
+                const statsText = `DMA Statistics:
+Enabled: ${stats.enabled ? 'Yes' : 'No'}
+Total Channels: ${stats.totalChannels}
+Active Channels: ${stats.activeChannels}
+Total Transfers: ${stats.totalTransfers}
+Total Bytes: ${stats.totalBytes}
+Clock Cycles: ${stats.clockCycles}
+Efficiency: ${stats.efficiency}
+Arbitration: ${stats.arbitrationMode}`;
+                output.textContent = statsText;
+            }
+            this.updateDMAStatus();
+        }
+    }
+
+    testDMATransfer() {
+        if (this.dmaController) {
+            try {
+                // Configure a test transfer on channel 0
+                this.dmaController.configureChannel(0, {
+                    sourceAddress: 0,
+                    destinationAddress: 100,
+                    transferSize: 10,
+                    direction: 'memory_to_io',
+                    transferMode: 'block',
+                    priority: 0
+                });
+                
+                // Start the transfer
+                this.dmaController.startTransfer(0);
+                
+                const output = document.getElementById('dmaOutput');
+                if (output) {
+                    output.textContent = 'Test DMA transfer started on channel 0\nTransferring 10 bytes from address 0 to 100\nMode: block transfer, Priority: 0';
+                }
+                
+                this.updateDMAStatus();
+                this.showMessage('DMA test transfer started', 'success');
+            } catch (error) {
+                this.showMessage(`DMA test error: ${error.message}`, 'error');
+            }
+        }
+    }
+
+    updateDMAStatus() {
+        if (this.dmaController) {
+            const stats = this.dmaController.getStats();
+            
+            document.getElementById('dmaStatus').textContent = 
+                stats.enabled ? (stats.activeChannels > 0 ? 'Active' : 'Ready') : 'Disabled';
+                
+            document.getElementById('dmaActiveChannels').textContent = stats.activeChannels;
+            document.getElementById('dmaTotalTransfers').textContent = stats.totalTransfers;
+            document.getElementById('dmaEfficiency').textContent = stats.efficiency;
+        }
+    }
+
+    // Cache system interface
+    showCacheStats() {
+        if (this.cacheSystem) {
+            const stats = this.cacheSystem.getStats();
+            const output = document.getElementById('cacheOutput');
+            if (output) {
+                const statsText = `Cache System Statistics:
+
+L1 Cache:
+- Size: ${stats.l1.size} lines (${stats.l1.associativity}-way associative)
+- Policy: ${stats.l1.policy}
+- Hits: ${stats.l1.hits}, Misses: ${stats.l1.misses}
+- Hit Rate: ${stats.l1.hitRate}
+- Evictions: ${stats.l1.evictions}, Writebacks: ${stats.l1.writebacks}
+
+L2 Cache:
+- Size: ${stats.l2.size} lines (${stats.l2.associativity}-way associative)
+- Policy: ${stats.l2.policy}
+- Hits: ${stats.l2.hits}, Misses: ${stats.l2.misses}
+- Hit Rate: ${stats.l2.hitRate}
+- Evictions: ${stats.l2.evictions}, Writebacks: ${stats.l2.writebacks}
+
+System:
+- Total Accesses: ${stats.system.totalAccesses}
+- L1 Only Rate: ${stats.system.l1OnlyRate}
+- L2 Hit Rate: ${stats.system.l2HitRate}
+- Memory Access Rate: ${stats.system.memoryAccessRate}
+- Write Policy: ${stats.system.writePolicy}
+- Allocation Policy: ${stats.system.allocationPolicy}`;
+                output.textContent = statsText;
+            }
+            this.updateCacheStatus();
+        }
+    }
+
+    benchmarkCache() {
+        if (this.cacheSystem) {
+            try {
+                const output = document.getElementById('cacheOutput');
+                if (output) {
+                    output.textContent = 'Running cache benchmark...';
+                }
+                
+                // Run benchmark with different access patterns
+                const sequential = this.cacheSystem.benchmarkAccess('sequential', 100);
+                const random = this.cacheSystem.benchmarkAccess('random', 100);
+                const stride = this.cacheSystem.benchmarkAccess('stride', 100);
+                
+                if (output) {
+                    const benchmarkText = `Cache Benchmark Results:
+
+Sequential Access (100 ops):
+- L1 Hit Rate: ${sequential.l1.hitRate}
+- L2 Hit Rate: ${sequential.l2.hitRate}
+- Time: ${sequential.benchmark.timeMs}ms
+- Ops/ms: ${sequential.benchmark.opsPerMs}
+
+Random Access (100 ops):
+- L1 Hit Rate: ${random.l1.hitRate}
+- L2 Hit Rate: ${random.l2.hitRate}
+- Time: ${random.benchmark.timeMs}ms
+- Ops/ms: ${random.benchmark.opsPerMs}
+
+Stride Access (100 ops):
+- L1 Hit Rate: ${stride.l1.hitRate}
+- L2 Hit Rate: ${stride.l2.hitRate}
+- Time: ${stride.benchmark.timeMs}ms
+- Ops/ms: ${stride.benchmark.opsPerMs}`;
+                    output.textContent = benchmarkText;
+                }
+                
+                this.updateCacheStatus();
+                this.showMessage('Cache benchmark completed', 'success');
+            } catch (error) {
+                this.showMessage(`Cache benchmark error: ${error.message}`, 'error');
+            }
+        }
+    }
+
+    flushCache() {
+        if (this.cacheSystem) {
+            try {
+                this.cacheSystem.flush();
+                const output = document.getElementById('cacheOutput');
+                if (output) {
+                    output.textContent = 'All caches flushed. Dirty data written back to memory.';
+                }
+                this.updateCacheStatus();
+                this.showMessage('Cache flushed successfully', 'success');
+            } catch (error) {
+                this.showMessage(`Cache flush error: ${error.message}`, 'error');
+            }
+        }
+    }
+
+    updateCacheStatus() {
+        if (this.cacheSystem) {
+            const stats = this.cacheSystem.getStats();
+            
+            document.getElementById('l1HitRate').textContent = stats.l1.hitRate;
+            document.getElementById('l2HitRate').textContent = stats.l2.hitRate;
+            document.getElementById('cacheAccesses').textContent = stats.system.totalAccesses;
+            document.getElementById('memoryHitRate').textContent = stats.system.memoryAccessRate;
+        }
     }
 
     // Debugging interface
