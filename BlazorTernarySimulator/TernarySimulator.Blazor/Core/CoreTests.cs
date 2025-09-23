@@ -136,7 +136,7 @@ namespace TernarySimulator.Blazor.Core
         {
             Console.WriteLine("Testing Integration...");
 
-            var simulator = new TernarySimulator();
+            var simulator = new TernarySimulatorCore();
             string consoleOutput = "";
 
             // Subscribe to console output

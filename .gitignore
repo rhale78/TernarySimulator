@@ -1,0 +1,27 @@
+# Build and temporary files
+node_modules/
+dist/
+build/
+.tmp/
+*.tmp
+*.log
+
+# .NET build artifacts
+bin/
+obj/
+*.dll
+*.pdb
+*.exe
+*.cache
+*.json.gz
+
+# IDE and editor files
+.vs/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

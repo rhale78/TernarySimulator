@@ -13,7 +13,7 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 // Register our simulator as a singleton service
-builder.Services.AddSingleton<TernarySimulator.Blazor.Core.TernarySimulator>();
+builder.Services.AddSingleton<TernarySimulator.Blazor.Core.TernarySimulatorCore>();
 
 var app = builder.Build();
 

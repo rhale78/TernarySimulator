@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TernarySimulator.Blazor")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7e1681036a00b6ab08a5a06b989d39b9a6ae4663")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ddbe0023a40b80ae3ccc161fcc79e349d660749d")]
 [assembly: System.Reflection.AssemblyProductAttribute("TernarySimulator.Blazor")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TernarySimulator.Blazor")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

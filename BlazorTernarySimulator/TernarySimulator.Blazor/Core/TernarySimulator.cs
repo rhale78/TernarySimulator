@@ -7,7 +7,7 @@ namespace TernarySimulator.Blazor.Core
     /// Main Ternary Simulator Controller
     /// Coordinates all components and provides simulation interface
     /// </summary>
-    public class TernarySimulator
+    public class TernarySimulatorCore
     {
         private readonly TernaryMemory _memory;
         private readonly TernaryCPU _cpu;
@@ -23,7 +23,7 @@ namespace TernarySimulator.Blazor.Core
         public event Action<string>? OnMessage;
         public event Action? OnStateChanged;
 
-        public TernarySimulator()
+        public TernarySimulatorCore()
         {
             _memory = new TernaryMemory();
             _cpu = new TernaryCPU(_memory);
@@ -335,9 +335,9 @@ namespace TernarySimulator.Blazor.Core
     /// </summary>
     public class ConsoleOutputDevice : IMemoryMappedDevice
     {
-        private readonly TernarySimulator _simulator;
+        private readonly TernarySimulatorCore _simulator;
 
-        public ConsoleOutputDevice(TernarySimulator simulator)
+        public ConsoleOutputDevice(TernarySimulatorCore simulator)
         {
             _simulator = simulator;
         }
