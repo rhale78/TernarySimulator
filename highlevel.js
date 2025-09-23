@@ -975,6 +975,59 @@ class TernaryHighLevelCompiler {
             case 'scanf':
                 this.generateScanf(statement);
                 break;
+                
+            // Extended string functions
+            case 'strcat':
+                this.generateStrcat(statement);
+                break;
+            case 'strcmp':
+                this.generateStrcmp(statement);
+                break;
+            case 'prints':
+                this.generatePrints(statement);
+                break;
+            case 'inputs':
+                this.generateInputs(statement);
+                break;
+            case 'getkey':
+                this.generateGetkey(statement);
+                break;
+            case 'putchar':
+                this.generatePutchar(statement);
+                break;
+                
+            // Graphics functions
+            case 'setpixel':
+                this.generateSetpixel(statement);
+                break;
+            case 'getpixel':
+                this.generateGetpixel(statement);
+                break;
+            case 'drawline':
+                this.generateDrawline(statement);
+                break;
+            case 'drawrect':
+                this.generateDrawrect(statement);
+                break;
+            case 'drawcircle':
+                this.generateDrawcircle(statement);
+                break;
+            case 'clearscreen':
+                this.generateClearscreen(statement);
+                break;
+            case 'setcursor':
+                this.generateSetcursor(statement);
+                break;
+            case 'getcursor':
+                this.generateGetcursor(statement);
+                break;
+            case 'settextcolor':
+                this.generateSettextcolor(statement);
+                break;
+            case 'setbackground':
+                this.generateSetbackground(statement);
+                break;
+                
             default:
                 // Check if this is a user-defined function
                 if (this.functions.has(statement.name)) {
@@ -1078,6 +1131,225 @@ class TernaryHighLevelCompiler {
         this.output.push('IN'); // Read input
         // Store into the variable (simplified)
         this.output.push('OUT'); // Echo for now
+        this.output.push('');
+    }
+    
+    // =================== EXTENDED STRING FUNCTION GENERATORS ===================
+    
+    generateStrcat(statement) {
+        if (statement.arguments.length !== 2) {
+            throw new Error('strcat() requires exactly two arguments');
+        }
+        this.output.push(`; strcat(dest, src)`);
+        this.generateExpression(statement.arguments[1]); // Source
+        this.output.push('STA temp_src');
+        this.generateExpression(statement.arguments[0]); // Destination  
+        this.output.push('STA IX');
+        this.output.push('LDA temp_src');
+        this.output.push('STA IX1');
+        this.output.push('STRCAT');
+        this.output.push('');
+    }
+    
+    generateStrcmp(statement) {
+        if (statement.arguments.length !== 2) {
+            throw new Error('strcmp() requires exactly two arguments');
+        }
+        this.output.push(`; strcmp(str1, str2)`);
+        this.generateExpression(statement.arguments[1]); // String 2
+        this.output.push('STA temp_str2');
+        this.generateExpression(statement.arguments[0]); // String 1
+        this.output.push('STA IX');
+        this.output.push('LDA temp_str2');
+        this.output.push('STA IX1');
+        this.output.push('STRCMP');
+        this.output.push('');
+    }
+    
+    generatePrints(statement) {
+        if (statement.arguments.length !== 1) {
+            throw new Error('prints() requires exactly one argument');
+        }
+        this.output.push(`; prints(str)`);
+        this.generateExpression(statement.arguments[0]); // String address
+        this.output.push('PRINTS');
+        this.output.push('');
+    }
+    
+    generateInputs(statement) {
+        if (statement.arguments.length !== 2) {
+            throw new Error('inputs() requires exactly two arguments (buffer, maxlen)');
+        }
+        this.output.push(`; inputs(buffer, maxlen)`);
+        this.generateExpression(statement.arguments[1]); // Max length
+        this.output.push('STA temp_maxlen');
+        this.generateExpression(statement.arguments[0]); // Buffer address
+        this.output.push('STA IX');
+        this.output.push('LDA temp_maxlen');
+        this.output.push('STA IX1');
+        this.output.push('INPUTS');
+        this.output.push('');
+    }
+    
+    generateGetkey(statement) {
+        if (statement.arguments.length !== 0) {
+            throw new Error('getkey() requires no arguments');
+        }
+        this.output.push(`; getkey()`);
+        this.output.push('GETKEY');
+        this.output.push('');
+    }
+    
+    generatePutchar(statement) {
+        if (statement.arguments.length !== 1) {
+            throw new Error('putchar() requires exactly one argument');
+        }
+        this.output.push(`; putchar(ch)`);
+        this.generateExpression(statement.arguments[0]); // Character
+        this.output.push('PUTCHAR');
+        this.output.push('');
+    }
+    
+    // =================== GRAPHICS FUNCTION GENERATORS ===================
+    
+    generateSetpixel(statement) {
+        if (statement.arguments.length !== 3) {
+            throw new Error('setpixel() requires exactly three arguments (x, y, color)');
+        }
+        this.output.push(`; setpixel(x, y, color)`);
+        this.generateExpression(statement.arguments[2]); // Color
+        this.output.push('STA temp_color');
+        this.generateExpression(statement.arguments[1]); // Y
+        this.output.push('STA IX1');
+        this.generateExpression(statement.arguments[0]); // X
+        this.output.push('STA IX');
+        this.output.push('LDA temp_color');
+        this.output.push('SETPIX');
+        this.output.push('');
+    }
+    
+    generateGetpixel(statement) {
+        if (statement.arguments.length !== 2) {
+            throw new Error('getpixel() requires exactly two arguments (x, y)');
+        }
+        this.output.push(`; getpixel(x, y)`);
+        this.generateExpression(statement.arguments[1]); // Y
+        this.output.push('STA temp_y');
+        this.generateExpression(statement.arguments[0]); // X
+        this.output.push('STA IX');
+        this.output.push('LDA temp_y');
+        this.output.push('GETPIX');
+        this.output.push('');
+    }
+    
+    generateDrawline(statement) {
+        if (statement.arguments.length !== 5) {
+            throw new Error('drawline() requires exactly five arguments (x1, y1, x2, y2, color)');
+        }
+        this.output.push(`; drawline(x1, y1, x2, y2, color)`);
+        this.generateExpression(statement.arguments[4]); // Color
+        this.output.push('STA ACC'); // Store color in accumulator
+        this.generateExpression(statement.arguments[3]); // Y2
+        this.output.push('STA temp_y2');
+        this.generateExpression(statement.arguments[2]); // X2
+        this.output.push('STA IX2');
+        this.generateExpression(statement.arguments[1]); // Y1
+        this.output.push('STA IX1');
+        this.generateExpression(statement.arguments[0]); // X1
+        this.output.push('STA IX');
+        this.output.push('LDA temp_y2');
+        this.output.push('DRAWLINE');
+        this.output.push('');
+    }
+    
+    generateDrawrect(statement) {
+        if (statement.arguments.length !== 5) {
+            throw new Error('drawrect() requires exactly five arguments (x, y, width, height, color)');
+        }
+        this.output.push(`; drawrect(x, y, width, height, color)`);
+        this.generateExpression(statement.arguments[4]); // Color
+        this.output.push('STA ACC');
+        this.generateExpression(statement.arguments[3]); // Height
+        this.output.push('STA temp_height');
+        this.generateExpression(statement.arguments[2]); // Width
+        this.output.push('STA IX2');
+        this.generateExpression(statement.arguments[1]); // Y
+        this.output.push('STA IX1');
+        this.generateExpression(statement.arguments[0]); // X
+        this.output.push('STA IX');
+        this.output.push('LDA temp_height');
+        this.output.push('DRAWRECT');
+        this.output.push('');
+    }
+    
+    generateDrawcircle(statement) {
+        if (statement.arguments.length !== 4) {
+            throw new Error('drawcircle() requires exactly four arguments (x, y, radius, color)');
+        }
+        this.output.push(`; drawcircle(x, y, radius, color)`);
+        this.generateExpression(statement.arguments[3]); // Color
+        this.output.push('STA ACC');
+        this.generateExpression(statement.arguments[2]); // Radius
+        this.output.push('STA temp_radius');
+        this.generateExpression(statement.arguments[1]); // Y
+        this.output.push('STA IX1');
+        this.generateExpression(statement.arguments[0]); // X
+        this.output.push('STA IX');
+        this.output.push('LDA temp_radius');
+        this.output.push('DRAWCIRC');
+        this.output.push('');
+    }
+    
+    generateClearscreen(statement) {
+        if (statement.arguments.length !== 1) {
+            throw new Error('clearscreen() requires exactly one argument (color)');
+        }
+        this.output.push(`; clearscreen(color)`);
+        this.generateExpression(statement.arguments[0]); // Color
+        this.output.push('CLRSCR');
+        this.output.push('');
+    }
+    
+    generateSetcursor(statement) {
+        if (statement.arguments.length !== 2) {
+            throw new Error('setcursor() requires exactly two arguments (x, y)');
+        }
+        this.output.push(`; setcursor(x, y)`);
+        this.generateExpression(statement.arguments[1]); // Y
+        this.output.push('STA temp_y');
+        this.generateExpression(statement.arguments[0]); // X
+        this.output.push('STA IX');
+        this.output.push('LDA temp_y');
+        this.output.push('SETCURS');
+        this.output.push('');
+    }
+    
+    generateGetcursor(statement) {
+        if (statement.arguments.length !== 0) {
+            throw new Error('getcursor() requires no arguments');
+        }
+        this.output.push(`; getcursor()`);
+        this.output.push('GETCURS');
+        this.output.push('');
+    }
+    
+    generateSettextcolor(statement) {
+        if (statement.arguments.length !== 1) {
+            throw new Error('settextcolor() requires exactly one argument (color)');
+        }
+        this.output.push(`; settextcolor(color)`);
+        this.generateExpression(statement.arguments[0]); // Color
+        this.output.push('SETTXT');
+        this.output.push('');
+    }
+    
+    generateSetbackground(statement) {
+        if (statement.arguments.length !== 1) {
+            throw new Error('setbackground() requires exactly one argument (color)');
+        }
+        this.output.push(`; setbackground(color)`);
+        this.generateExpression(statement.arguments[0]); // Color
+        this.output.push('SETBG');
         this.output.push('');
     }
 

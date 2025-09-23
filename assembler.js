@@ -119,7 +119,29 @@ class TernaryAssembler {
             'TSTA': 92,  // Timer start
             'TSTP': 93,  // Timer stop
             'TSTS': 94,  // Timer status
-            'CLKR': 95   // Clock read
+            'CLKR': 95,  // Clock read
+            
+            // String and I/O operations
+            'STRLEN': 96,  // String length - system call 10
+            'STRCPY': 97,  // String copy - system call 11
+            'STRCAT': 98,  // String concatenate - system call 12
+            'STRCMP': 99,  // String compare - system call 13
+            'PRINTS': 100, // Print string to console - system call 14
+            'INPUTS': 101, // Input string from keyboard - system call 15
+            'GETKEY': 102, // Get key from keyboard - system call 2
+            'PUTCHAR': 103, // Put character to console - system call 1
+            
+            // Graphics operations  
+            'SETPIX': 104,  // Set pixel color - system call 20
+            'GETPIX': 105,  // Get pixel color - system call 21
+            'DRAWLINE': 106, // Draw line - system call 22
+            'DRAWRECT': 107, // Draw rectangle - system call 23
+            'DRAWCIRC': 108, // Draw circle - system call 24
+            'CLRSCR': 109,   // Clear screen - system call 25
+            'SETCURS': 110,  // Set cursor position - system call 26
+            'GETCURS': 111,  // Get cursor position - system call 27
+            'SETTXT': 112,   // Set text color - system call 28
+            'SETBG': 113     // Set background color - system call 29
         };
 
         // Register names
