@@ -18,6 +18,7 @@ class TernarySimulator {
         
         this.initializeUI();
         this.setupEventListeners();
+        this.setupDiskControls();
         this.updateDisplay();
     }
 
@@ -74,6 +75,12 @@ class TernarySimulator {
         }
     }
 
+    setupDiskControls() {
+        // Disk drive controls
+        document.getElementById('diskListBtn')?.addEventListener('click', () => this.listDiskFiles());
+        document.getElementById('diskStatsBtn')?.addEventListener('click', () => this.showDiskStats());
+    }
+
     initializeGraphics() {
         const canvas = document.getElementById('graphicsDisplay');
         if (canvas) {
@@ -83,6 +90,9 @@ class TernarySimulator {
         
         // Initialize ternary graphics display
         this.ternaryGraphics = new TernaryGraphicsDisplay(81, 81);
+        
+        // Initialize virtual disk drive
+        this.diskDrive = new VirtualDiskDrive();
     }
 
     clearGraphics() {
@@ -315,6 +325,7 @@ class TernarySimulator {
         this.updateALU();
         this.updateDebugInfo();
         this.updateSystemStatus();
+        this.updateDiskStatus();
     }
 
     updateRegisters() {
@@ -623,6 +634,58 @@ class TernarySimulator {
             messageDiv.style.opacity = '0';
             setTimeout(() => document.body.removeChild(messageDiv), 300);
         }, 3000);
+    }
+
+    // Disk drive interface
+    listDiskFiles() {
+        if (this.diskDrive) {
+            try {
+                const contents = this.diskDrive.listDirectory('/');
+                const output = document.getElementById('diskOutput');
+                if (output) {
+                    let listing = 'Files in /:\n';
+                    for (let item of contents) {
+                        const type = item.type === 'directory' ? 'DIR' : 'FILE';
+                        listing += `${type.padEnd(4)} ${item.name.padEnd(15)} ${item.size} bytes\n`;
+                    }
+                    output.textContent = listing;
+                }
+                this.updateDiskStatus();
+            } catch (error) {
+                this.showMessage(`Disk error: ${error.message}`, 'error');
+            }
+        }
+    }
+
+    showDiskStats() {
+        if (this.diskDrive) {
+            const stats = this.diskDrive.getStats();
+            const output = document.getElementById('diskOutput');
+            if (output) {
+                const statsText = `Disk Statistics:
+Total Files: ${stats.totalFiles}/${stats.maxFiles}
+Directories: ${stats.totalDirectories}
+Sectors: ${stats.usedSectors}/${stats.totalSectors}
+Utilization: ${stats.utilization}
+Sector Size: ${stats.sectorSize} trytes`;
+                output.textContent = statsText;
+            }
+            this.updateDiskStatus();
+        }
+    }
+
+    updateDiskStatus() {
+        if (this.diskDrive) {
+            const stats = this.diskDrive.getStats();
+            
+            document.getElementById('diskStatus').textContent = 
+                this.diskDrive.diskStatus === 0 ? 'Ready' : 
+                this.diskDrive.diskStatus === 1 ? 'Busy' : 'Error';
+                
+            document.getElementById('diskFiles').textContent = stats.totalFiles;
+            document.getElementById('diskMaxFiles').textContent = stats.maxFiles;
+            document.getElementById('diskUsage').textContent = stats.utilization;
+        }
     }
 
     // Debugging interface

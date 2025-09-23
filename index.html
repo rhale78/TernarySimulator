@@ -193,6 +193,19 @@
                             <div>Memory: 6561 pixels</div>
                         </div>
                     </div>
+                    <div class="disk-drive">
+                        <h4>Virtual Disk Drive</h4>
+                        <div class="disk-status">
+                            <div>Status: <span id="diskStatus">Ready</span></div>
+                            <div>Files: <span id="diskFiles">0</span>/<span id="diskMaxFiles">243</span></div>
+                            <div>Used: <span id="diskUsage">0%</span></div>
+                        </div>
+                        <div class="disk-controls">
+                            <button id="diskListBtn">List Files</button>
+                            <button id="diskStatsBtn">Show Stats</button>
+                        </div>
+                        <div id="diskOutput" class="disk-output"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -243,6 +256,7 @@
     <script src="interrupts.js"></script>
     <script src="ternary.js"></script>
     <script src="graphics.js"></script>
+    <script src="disk.js"></script>
     <script src="cpu.js"></script>
     <script src="memory.js"></script>
     <script src="assembler.js"></script>

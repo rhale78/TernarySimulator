@@ -298,6 +298,13 @@ class MemoryMappedIO {
             write: (addr, value) => this.handleTernaryGraphicsWrite(addr, value)
         });
 
+        // Virtual disk drive I/O (50 addresses for disk operations)
+        this.defineRegion(maxAddr - 6711, maxAddr - 6662, {
+            name: 'disk_io',
+            read: (addr) => this.handleDiskRead(addr),
+            write: (addr, value) => this.handleDiskWrite(addr, value)
+        });
+
         // System control
         this.defineRegion(maxAddr - 5, maxAddr - 1, {
             name: 'system',
@@ -387,6 +394,25 @@ class MemoryMappedIO {
             const maxAddr = this.memory.maxAddress;
             const graphicsAddr = address.toDecimal() - (maxAddr - 6661);
             window.simulator.ternaryGraphics.writePixelFromTryte(graphicsAddr, value);
+        }
+    }
+
+    handleDiskRead(address) {
+        // Read from virtual disk drive
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.diskDrive) {
+            const maxAddr = this.memory.maxAddress;
+            const diskAddr = address.toDecimal() - (maxAddr - 6711);
+            return window.simulator.diskDrive.handleMemoryRead(diskAddr);
+        }
+        return new Tryte(0);
+    }
+
+    handleDiskWrite(address, value) {
+        // Write to virtual disk drive
+        if (typeof window !== 'undefined' && window.simulator && window.simulator.diskDrive) {
+            const maxAddr = this.memory.maxAddress;
+            const diskAddr = address.toDecimal() - (maxAddr - 6711);
+            window.simulator.diskDrive.handleMemoryWrite(diskAddr, value);
         }
     }
 
