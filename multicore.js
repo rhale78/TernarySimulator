@@ -20,11 +20,19 @@ class MultiCoreCPU {
             interrupts: null
         };
         
+        // Multi-core synchronization
+        this.globalLocks = new Map();      // Shared locks across cores
+        this.syncBarriers = new Map();     // Synchronization barriers
+        this.interCoreMessages = new Map(); // Inter-core message queue
+        
         // Initialize cores
         for (let i = 0; i < this.coreCount; i++) {
             const core = new TernaryCPU(memory);
             core.coreId = i;
             core.isMultiCore = true;
+            core.multiCoreSystem = this;
+            core.multiCoreLocks = this.globalLocks; // Share locks
+            core.syncBarriers = this.syncBarriers;   // Share barriers
             this.cores.push(core);
         }
         
@@ -37,7 +45,7 @@ class MultiCoreCPU {
         this.activeCore = 0; // For single-threaded mode
         this.parallelMode = false;
         
-        console.log(`Multi-core CPU initialized with ${this.coreCount} core(s)`);
+        console.log(`Multi-core CPU initialized with ${this.coreCount} core(s) and synchronization features`);
     }
     
     setupSharedResources() {
@@ -120,16 +128,88 @@ class MultiCoreCPU {
     
     // Synchronize cores at sync barriers
     synchronizeCores() {
-        // Simple barrier synchronization
-        // In real implementation, this would handle cache coherency,
-        // memory barriers, and inter-core communication
-        
+        // Handle memory barriers and cache coherency
         for (let core of this.cores) {
             // Flush any pending writes
             if (core.memory && core.memory.cache) {
                 core.memory.cache.flush();
             }
         }
+        
+        // Check synchronization barriers
+        for (let [syncPoint, barrier] of this.syncBarriers) {
+            if (barrier.size >= this.coreCount) {
+                // All cores have reached this barrier - release them
+                for (let core of this.cores) {
+                    if (core.stalled && core.alu.flags.zero === 0) {
+                        core.stalled = false;
+                        core.alu.flags.zero = 1; // Signal sync complete
+                    }
+                }
+                
+                // Clear the barrier
+                this.syncBarriers.delete(syncPoint);
+                console.log(`Multi-core: Synchronization barrier ${syncPoint} released`);
+            }
+        }
+        
+        // Handle inter-core message delivery
+        this.processInterCoreMessages();
+    }
+    
+    // Process inter-core messages
+    processInterCoreMessages() {
+        for (let [coreId, messages] of this.interCoreMessages) {
+            if (messages.length > 0 && coreId < this.cores.length) {
+                const targetCore = this.cores[coreId];
+                const message = messages.shift(); // Get oldest message
+                
+                // Deliver message as interrupt
+                if (targetCore.interruptController) {
+                    targetCore.interruptController.triggerInterrupt(15, message);
+                }
+            }
+        }
+    }
+    
+    // Send message to specific core
+    sendMessageToCore(fromCore, toCore, message) {
+        if (toCore >= 0 && toCore < this.coreCount) {
+            if (!this.interCoreMessages.has(toCore)) {
+                this.interCoreMessages.set(toCore, []);
+            }
+            
+            this.interCoreMessages.get(toCore).push({
+                source: fromCore,
+                data: message,
+                timestamp: Date.now()
+            });
+            
+            return true;
+        }
+        return false;
+    }
+    
+    // Get synchronization statistics
+    getSyncStats() {
+        return {
+            activeLocks: this.globalLocks.size,
+            activeBarriers: this.syncBarriers.size,
+            pendingMessages: Array.from(this.interCoreMessages.values())
+                .reduce((total, queue) => total + queue.length, 0),
+            lockContention: this.getLockContentionStats()
+        };
+    }
+    
+    // Get lock contention statistics
+    getLockContentionStats() {
+        const stats = {};
+        for (let [address, coreId] of this.globalLocks) {
+            if (!stats[address]) {
+                stats[address] = { owner: coreId, contenders: 0 };
+            }
+        }
+        return stats;
     }
     
     // Run all cores
