@@ -626,6 +626,17 @@ class TernaryCPU {
             'T2B': { opcode: 74, execute: this.ternaryToBinary.bind(this) },     // Ternary to binary conversion
             'B2T': { opcode: 75, execute: this.binaryToTernary.bind(this) },     // Binary to ternary conversion
             
+            // Enhanced clock and timer instructions
+            'TEDG': { opcode: 87, execute: this.ternaryEdgeDetect.bind(this) },  // Ternary edge detect
+            'BEDG': { opcode: 88, execute: this.binaryEdgeDetect.bind(this) },   // Binary edge detect
+            'TCRT': { opcode: 89, execute: this.timerCreate.bind(this) },        // Timer create
+            'TDEL': { opcode: 90, execute: this.timerDelete.bind(this) },        // Timer delete
+            'TSET': { opcode: 91, execute: this.timerSet.bind(this) },           // Timer set preset
+            'TSTA': { opcode: 92, execute: this.timerStart.bind(this) },         // Timer start
+            'TSTP': { opcode: 93, execute: this.timerStop.bind(this) },          // Timer stop
+            'TSTS': { opcode: 94, execute: this.timerStatus.bind(this) },        // Timer status
+            'CLKR': { opcode: 95, execute: this.clockRead.bind(this) },          // Clock read
+            
             // Multi-core synchronization operations
             'LOCK': { opcode: 76, execute: this.lockMemory.bind(this) },         // Lock memory for atomic operation
             'UNLOCK': { opcode: 77, execute: this.unlockMemory.bind(this) },     // Unlock memory
