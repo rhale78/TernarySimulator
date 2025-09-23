@@ -399,6 +399,9 @@ class TernaryCPU {
         this.pipeline = new InstructionPipeline(this);
         this.usePipeline = false; // Flag to enable/disable pipelining
         
+        // Floating-Point Unit
+        this.fpu = new FloatingPointUnit();
+        
         // Interrupt system
         this.romChip = new ROMChip();
         this.interruptVectorTable = new InterruptVectorTable(memory);
@@ -494,6 +497,16 @@ class TernaryCPU {
             'MOVW': { opcode: 25, execute: this.moveWordBlock.bind(this) },      // Move word block
             'MOVT': { opcode: 26, execute: this.moveTripleBlock.bind(this) },    // Move triple-word block
             'CLRB': { opcode: 27, execute: this.clearBlock.bind(this) },         // Clear block
+            
+            // Floating-point operations
+            'FLDA': { opcode: 28, execute: this.floatLoad.bind(this) },          // Load float to FPU
+            'FSTA': { opcode: 29, execute: this.floatStore.bind(this) },         // Store float from FPU
+            'FADD': { opcode: 30, execute: this.floatAdd.bind(this) },           // Float add
+            'FSUB': { opcode: 31, execute: this.floatSubtract.bind(this) },      // Float subtract
+            'FMUL': { opcode: 32, execute: this.floatMultiply.bind(this) },      // Float multiply
+            'FDIV': { opcode: 33, execute: this.floatDivide.bind(this) },        // Float divide
+            'FCMP': { opcode: 34, execute: this.floatCompare.bind(this) },       // Float compare
+            'FMOD': { opcode: 35, execute: this.floatMode.bind(this) },          // Set FPU mode (ternary/binary)
             
             'NOP': { opcode: 0,  execute: this.noOperation.bind(this) },         // No operation
             'HLT': { opcode: -13, execute: this.halt.bind(this) }                // Halt
@@ -1303,6 +1316,160 @@ class TernaryCPU {
         }
     }
 
+    // Floating-Point Operations
+    floatLoad(operand) {
+        // Load value into FPU accumulator (FACC)
+        if (typeof operand === 'number') {
+            this.fpu.load('FACC', operand);
+        } else {
+            // Load from memory - assume standard 12-trit float format
+            const addr = new TernaryAddress(operand, 9);
+            const low = this.memory.read(addr);
+            const high = this.memory.read(addr.increment());
+            
+            // Combine two trytes into float representation
+            const combinedTrits = [];
+            combinedTrits.push(...low.trits.slice(0, 6));
+            combinedTrits.push(...high.trits.slice(0, 6));
+            
+            // Create TernaryFloat from trits
+            const float = new TernaryFloat(0, 'standard');
+            float.sign = combinedTrits[0] || 0;
+            
+            // Extract exponent (3 trits)
+            const expTrits = combinedTrits.slice(1, 4);
+            const expBT = new BalancedTernary();
+            expBT.trits = expTrits;
+            float.exponent = expBT.toDecimal() + float.exponentBias;
+            
+            // Extract mantissa (8 trits)
+            const mantTrits = combinedTrits.slice(4, 12);
+            const mantBT = new BalancedTernary();
+            mantBT.trits = mantTrits;
+            float.mantissa = mantBT.toDecimal();
+            
+            this.fpu.ternaryRegisters.FACC = float;
+        }
+    }
+
+    floatStore(operand) {
+        // Store FPU accumulator to memory
+        const float = this.fpu.ternaryRegisters.FACC;
+        const addr = new TernaryAddress(operand, 9);
+        
+        // Convert float to two trytes
+        const bt = float.toBalancedTernary();
+        const trits = bt.trits.slice();
+        
+        // Pad to 12 trits
+        while (trits.length < 12) {
+            trits.push(0);
+        }
+        
+        // Split into two 6-trit chunks
+        const lowTrits = trits.slice(0, 6);
+        const highTrits = trits.slice(6, 12);
+        
+        const low = new Tryte();
+        low.trits = lowTrits;
+        low.normalize();
+        
+        const high = new Tryte();
+        high.trits = highTrits;
+        high.normalize();
+        
+        this.memory.write(addr, low);
+        this.memory.write(addr.increment(), high);
+    }
+
+    floatAdd(operand) {
+        // Add to FPU accumulator
+        if (typeof operand === 'number') {
+            const operandFloat = new TernaryFloat(operand, 'standard');
+            this.fpu.ternaryRegisters.FACC = this.fpu.ternaryRegisters.FACC.add(operandFloat);
+        } else {
+            // Load float from memory and add
+            this.floatLoad(operand); // This loads into FACC temporarily
+            const temp = this.fpu.ternaryRegisters.FACC;
+            this.fpu.load('FACC', this.fpu.ternaryRegisters.FACC.toDecimal()); // Restore original
+            this.fpu.ternaryRegisters.FACC = this.fpu.ternaryRegisters.FACC.add(temp);
+        }
+        this.fpu.updateFlags();
+    }
+
+    floatSubtract(operand) {
+        // Subtract from FPU accumulator
+        if (typeof operand === 'number') {
+            const operandFloat = new TernaryFloat(operand, 'standard');
+            this.fpu.ternaryRegisters.FACC = this.fpu.ternaryRegisters.FACC.subtract(operandFloat);
+        } else {
+            // Similar to floatAdd but subtract
+            this.floatLoad(operand);
+            const temp = this.fpu.ternaryRegisters.FACC;
+            this.fpu.load('FACC', this.fpu.ternaryRegisters.FACC.toDecimal());
+            this.fpu.ternaryRegisters.FACC = this.fpu.ternaryRegisters.FACC.subtract(temp);
+        }
+        this.fpu.updateFlags();
+    }
+
+    floatMultiply(operand) {
+        // Multiply FPU accumulator
+        if (typeof operand === 'number') {
+            const operandFloat = new TernaryFloat(operand, 'standard');
+            this.fpu.ternaryRegisters.FACC = this.fpu.ternaryRegisters.FACC.multiply(operandFloat);
+        } else {
+            this.floatLoad(operand);
+            const temp = this.fpu.ternaryRegisters.FACC;
+            this.fpu.load('FACC', this.fpu.ternaryRegisters.FACC.toDecimal());
+            this.fpu.ternaryRegisters.FACC = this.fpu.ternaryRegisters.FACC.multiply(temp);
+        }
+        this.fpu.updateFlags();
+    }
+
+    floatDivide(operand) {
+        // Divide FPU accumulator
+        try {
+            if (typeof operand === 'number') {
+                const operandFloat = new TernaryFloat(operand, 'standard');
+                this.fpu.ternaryRegisters.FACC = this.fpu.ternaryRegisters.FACC.divide(operandFloat);
+            } else {
+                this.floatLoad(operand);
+                const temp = this.fpu.ternaryRegisters.FACC;
+                this.fpu.load('FACC', this.fpu.ternaryRegisters.FACC.toDecimal());
+                this.fpu.ternaryRegisters.FACC = this.fpu.ternaryRegisters.FACC.divide(temp);
+            }
+        } catch (error) {
+            this.fpu.flags.invalid = 1;
+        }
+        this.fpu.updateFlags();
+    }
+
+    floatCompare(operand) {
+        // Compare FPU accumulator with operand
+        let comparison;
+        if (typeof operand === 'number') {
+            const operandFloat = new TernaryFloat(operand, 'standard');
+            comparison = this.fpu.ternaryRegisters.FACC.compare(operandFloat);
+        } else {
+            // Load from memory and compare
+            const currentValue = this.fpu.ternaryRegisters.FACC.toDecimal();
+            this.floatLoad(operand);
+            const operandFloat = this.fpu.ternaryRegisters.FACC;
+            this.fpu.load('FACC', currentValue); // Restore original
+            comparison = this.fpu.ternaryRegisters.FACC.compare(operandFloat);
+        }
+        
+        // Set CPU flags based on comparison
+        this.alu.flags.zero = comparison === 0 ? 1 : 0;
+        this.alu.flags.positive = comparison > 0 ? 1 : 0;
+        this.alu.flags.negative = comparison < 0 ? 1 : 0;
+    }
+
+    floatMode(operand) {
+        // Switch FPU mode between ternary (0) and binary (1)
+        this.fpu.setMode(operand === 0 ? 'ternary' : 'binary');
+    }
+
     // CPU execution control
     step() {
         if (this.halted) return false;
@@ -1491,6 +1658,9 @@ class TernaryCPU {
         // Reset pipeline system
         this.pipeline.reset();
         
+        // Reset FPU
+        this.fpu.reset();
+        
         // Reset interrupt system
         this.interruptController.reset();
         this.interruptVectorTable.reset();
@@ -1549,6 +1719,11 @@ class TernaryCPU {
         // Add pipeline status
         if (this.pipeline) {
             baseState.pipelineStatus = this.pipeline.getState();
+        }
+        
+        // Add FPU status
+        if (this.fpu) {
+            baseState.fpuStatus = this.fpu.getState();
         }
         
         return baseState;

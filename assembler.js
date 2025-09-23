@@ -56,13 +56,28 @@ class TernaryAssembler {
             'MOVC': 24,  // Memory copy block
             'MOVW': 25,  // Move word block
             'MOVT': 26,  // Move triple-word block
-            'CLRB': 27   // Clear block
+            'CLRB': 27,  // Clear block
+            
+            // Floating-point operations
+            'FLDA': 28,  // Load float to FPU
+            'FSTA': 29,  // Store float from FPU
+            'FADD': 30,  // Float add
+            'FSUB': 31,  // Float subtract
+            'FMUL': 32,  // Float multiply
+            'FDIV': 33,  // Float divide
+            'FCMP': 34,  // Float compare
+            'FMOD': 35   // Set FPU mode (ternary/binary)
         };
 
         // Register names
         this.registers = {
             'ACC': 0, 'IX': 1, 'IX1': 14, 'IX2': 15, 'IX3': 16, 'PC': 2, 'SP': 3, 'FLAGS': 4,
-            'R1': 5, 'R2': 6, 'R3': 7, 'R4': 8, 'R5': 9, 'R6': 10, 'R7': 11, 'R8': 12, 'R9': 13
+            'R1': 5, 'R2': 6, 'R3': 7, 'R4': 8, 'R5': 9, 'R6': 10, 'R7': 11, 'R8': 12, 'R9': 13,
+            // Extended registers
+            'ACCW': 20, 'ACCT': 21, 'W1': 22, 'W2': 23, 'T1': 24, 'T2': 25,
+            // FPU registers
+            'F0': 30, 'F1': 31, 'F2': 32, 'F3': 33, 'FE0': 34, 'FE1': 35, 'FACC': 36, 'FACCX': 37,
+            'B0': 40, 'B1': 41, 'B2': 42, 'B3': 43, 'BACC': 44
         };
 
         // Addressing modes
