@@ -18,21 +18,23 @@ if (typeof module !== 'undefined' && module.exports) {
 }
 
 /**
- * Ternary Clock - generates ternary clock signal with pattern: 0, +1, 0, -1, 0, +1, ...
- * Provides proper ternary timing for CPU and component synchronization
+ * Ternary Clock - generates ternary clock signal with enhanced pattern: 0→0→1→1→0→0→-1→-1→0
+ * Provides proper ternary timing with positive/negative edge detection
  */
 class TernaryClock {
     constructor(frequency = 100) {
         this.frequency = frequency; // Hz
         this.period = 1000 / frequency; // ms
-        this.phase = 0; // Current phase: 0, 1, 2, 3 (maps to 0, +1, 0, -1)
+        this.phase = 0; // Current phase: 0-7 for 8-phase cycle
         this.signal = 0; // Current clock signal value
+        this.lastSignal = 0; // Previous signal for edge detection
         this.running = false;
         this.callbacks = [];
         this.intervalId = null;
         
-        // Phase to signal mapping for ternary clock
-        this.phaseMap = [0, 1, 0, -1]; // 0 -> 0, 1 -> +1, 2 -> 0, 3 -> -1
+        // Enhanced phase to signal mapping for ternary clock
+        // Pattern: 0→0→1→1→0→0→-1→-1→0 (repeats)
+        this.phaseMap = [0, 0, 1, 1, 0, 0, -1, -1]; // 8-phase cycle
     }
     
     start() {
@@ -41,7 +43,7 @@ class TernaryClock {
         this.running = true;
         this.intervalId = setInterval(() => {
             this.tick();
-        }, this.period / 4); // 4 phases per period
+        }, this.period / 8); // 8 phases per period
     }
     
     stop() {
@@ -55,14 +57,17 @@ class TernaryClock {
     }
     
     tick() {
+        // Store previous signal for edge detection
+        this.lastSignal = this.signal;
+        
         // Advance to next phase
-        this.phase = (this.phase + 1) % 4;
+        this.phase = (this.phase + 1) % 8;
         this.signal = this.phaseMap[this.phase];
         
         // Notify all callbacks
         this.callbacks.forEach(callback => {
             try {
-                callback(this.signal, this.phase);
+                callback(this.signal, this.phase, this.lastSignal);
             } catch (error) {
                 console.error('Clock callback error:', error);
             }
@@ -88,27 +93,60 @@ class TernaryClock {
         return this.phase;
     }
     
-    // Check for specific phase transitions
+    // Enhanced edge detection for ternary clock
     isRisingEdge() {
-        return this.phase === 1; // 0 -> +1 transition
+        // 0 -> 1 transition (positive rising edge)
+        return this.lastSignal === 0 && this.signal === 1;
     }
     
     isFallingEdge() {
-        return this.phase === 3; // 0 -> -1 transition
+        // 1 -> 0 or -1 -> 0 transitions (falling edges)
+        return (this.lastSignal === 1 && this.signal === 0) || 
+               (this.lastSignal === -1 && this.signal === 0);
+    }
+    
+    isPositiveEdge() {
+        // Any transition to positive value (0 -> 1)
+        return this.lastSignal === 0 && this.signal === 1;
+    }
+    
+    isNegativeEdge() {
+        // Any transition to negative value (0 -> -1)
+        return this.lastSignal === 0 && this.signal === -1;
+    }
+    
+    isPositiveFallingEdge() {
+        // 1 -> 0 transition (positive signal falling)
+        return this.lastSignal === 1 && this.signal === 0;
+    }
+    
+    isNegativeFallingEdge() {
+        // 0 -> -1 transition (signal falling to negative)
+        return this.lastSignal === 0 && this.signal === -1;
+    }
+    
+    isNegativeRisingEdge() {
+        // -1 -> 0 transition (negative signal rising)
+        return this.lastSignal === -1 && this.signal === 0;
     }
     
     isNeutralPhase() {
-        return this.phase === 0 || this.phase === 2;
+        return this.signal === 0;
+    }
+    
+    getLastSignal() {
+        return this.lastSignal;
     }
     
     reset() {
         this.phase = 0;
         this.signal = 0;
+        this.lastSignal = 0;
     }
 }
 
 /**
- * Binary Clock - generates standard binary clock signal with rising/falling edges
+ * Binary Clock - generates standard binary clock signal with enhanced edge detection
  * Compatible with binary flip-flops and latches
  */
 class BinaryClock {
@@ -178,6 +216,15 @@ class BinaryClock {
     
     isFallingEdge() {
         return this.signal === 0 && this.lastSignal === 1;
+    }
+    
+    // Binary clock doesn't have negative edge detection (only 0 and 1 states)
+    isPositiveEdge() {
+        return this.isRisingEdge(); // Same as rising edge for binary
+    }
+    
+    getLastSignal() {
+        return this.lastSignal;
     }
     
     reset() {
@@ -362,21 +409,128 @@ class ClockDivider {
 }
 
 /**
- * Clock Manager - manages multiple clocks and provides system-wide timing
- * Coordinates ternary and binary clocks for proper system operation
+ * Hardware Timer - programmable timer that can be binary or ternary
+ * Provides countdown functionality with configurable clock source
  */
+class HardwareTimer {
+    constructor(id, clockType = 'binary', frequency = 100) {
+        this.id = id;
+        this.clockType = clockType;
+        this.frequency = frequency;
+        this.clock = clockType === 'binary' ? new BinaryClock(frequency) : new TernaryClock(frequency);
+        this.counter = 0;
+        this.preset = 0;
+        this.running = false;
+        this.overflow = false;
+        this.callbacks = [];
+        
+        // Connect to clock for counting
+        this.clock.addCallback((signal, phase, lastSignal) => {
+            if (this.running && this.shouldCount(signal, lastSignal)) {
+                this.count();
+            }
+        });
+    }
+    
+    shouldCount(signal, lastSignal) {
+        if (this.clockType === 'binary') {
+            // Count on rising edge for binary
+            return signal === 1 && lastSignal === 0;
+        } else {
+            // Count on positive rising edge for ternary (0 -> 1)
+            return lastSignal === 0 && signal === 1;
+        }
+    }
+    
+    count() {
+        if (this.counter > 0) {
+            this.counter--;
+            if (this.counter === 0) {
+                this.overflow = true;
+                this.running = false;
+                
+                // Notify callbacks
+                this.callbacks.forEach(callback => {
+                    try {
+                        callback(this.id, true);
+                    } catch (error) {
+                        console.error('Timer callback error:', error);
+                    }
+                });
+            }
+        }
+    }
+    
+    start(preset = null) {
+        if (preset !== null) {
+            this.preset = preset;
+            this.counter = preset;
+        }
+        this.running = true;
+        this.overflow = false;
+        this.clock.start();
+    }
+    
+    stop() {
+        this.running = false;
+        this.clock.stop();
+    }
+    
+    reset() {
+        this.counter = this.preset;
+        this.overflow = false;
+        this.running = false;
+    }
+    
+    setPreset(value) {
+        this.preset = value;
+        this.counter = value;
+    }
+    
+    getCounter() {
+        return this.counter;
+    }
+    
+    isRunning() {
+        return this.running;
+    }
+    
+    hasOverflow() {
+        return this.overflow;
+    }
+    
+    addCallback(callback) {
+        this.callbacks.push(callback);
+    }
+    
+    removeCallback(callback) {
+        const index = this.callbacks.indexOf(callback);
+        if (index >= 0) {
+            this.callbacks.splice(index, 1);
+        }
+    }
+    
+    getClock() {
+        return this.clock;
+    }
+}
 class ClockManager {
     constructor() {
         this.ternaryClock = new TernaryClock(100); // 100 Hz ternary clock
         this.binaryClock = new BinaryClock(100);   // 100 Hz binary clock
         this.cpuClock = new TernaryClock(50);      // 50 Hz CPU clock (slower for stability)
         
+        // Hardware timers (up to 3 additional)
+        this.hardwareTimers = new Map();
+        this.maxTimers = 3;
+        this.nextTimerId = 0;
+        
         // Clock dividers for different subsystems
         this.memoryClockDivider = new ClockDivider(2, 'ternary'); // 50 Hz memory clock
         this.ioDivider = new ClockDivider(4, 'binary');           // 25 Hz I/O clock
         
         // Connect clock dividers to master clocks
-        this.ternaryClock.addCallback((signal, phase) => {
+        this.ternaryClock.addCallback((signal, phase, lastSignal) => {
             this.memoryClockDivider.pulse(signal);
         });
         
@@ -387,6 +541,37 @@ class ClockManager {
         this.running = false;
     }
     
+    // Hardware timer management
+    createTimer(clockType = 'binary', frequency = 100) {
+        if (this.hardwareTimers.size >= this.maxTimers) {
+            throw new Error(`Maximum number of hardware timers (${this.maxTimers}) reached`);
+        }
+        
+        const timerId = this.nextTimerId++;
+        const timer = new HardwareTimer(timerId, clockType, frequency);
+        this.hardwareTimers.set(timerId, timer);
+        
+        return timerId;
+    }
+    
+    getTimer(timerId) {
+        return this.hardwareTimers.get(timerId);
+    }
+    
+    removeTimer(timerId) {
+        const timer = this.hardwareTimers.get(timerId);
+        if (timer) {
+            timer.stop();
+            this.hardwareTimers.delete(timerId);
+            return true;
+        }
+        return false;
+    }
+    
+    listTimers() {
+        return Array.from(this.hardwareTimers.keys());
+    }
+    
     start() {
         if (this.running) return;
         
@@ -394,6 +579,13 @@ class ClockManager {
         this.ternaryClock.start();
         this.binaryClock.start();
         this.cpuClock.start();
+        
+        // Start all hardware timers that are configured to run
+        this.hardwareTimers.forEach(timer => {
+            if (timer.isRunning()) {
+                timer.getClock().start();
+            }
+        });
     }
     
     stop() {
@@ -403,6 +595,11 @@ class ClockManager {
         this.ternaryClock.stop();
         this.binaryClock.stop();
         this.cpuClock.stop();
+        
+        // Stop all hardware timers
+        this.hardwareTimers.forEach(timer => {
+            timer.stop();
+        });
     }
     
     reset() {
@@ -411,6 +608,11 @@ class ClockManager {
         this.cpuClock.reset();
         this.memoryClockDivider.reset();
         this.ioDivider.reset();
+        
+        // Reset all hardware timers
+        this.hardwareTimers.forEach(timer => {
+            timer.reset();
+        });
     }
     
     getTernaryClock() {
@@ -435,15 +637,35 @@ class ClockManager {
     
     // Get clock status for debugging
     getStatus() {
+        const timerStatus = {};
+        this.hardwareTimers.forEach((timer, id) => {
+            timerStatus[id] = {
+                type: timer.clockType,
+                running: timer.isRunning(),
+                counter: timer.getCounter(),
+                overflow: timer.hasOverflow(),
+                frequency: timer.frequency
+            };
+        });
+        
         return {
             running: this.running,
             ternarySignal: this.ternaryClock.getSignal(),
             ternaryPhase: this.ternaryClock.getPhase(),
+            ternaryLastSignal: this.ternaryClock.getLastSignal(),
+            ternaryRisingEdge: this.ternaryClock.isRisingEdge(),
+            ternaryFallingEdge: this.ternaryClock.isFallingEdge(),
+            ternaryPositiveEdge: this.ternaryClock.isPositiveEdge(),
+            ternaryNegativeEdge: this.ternaryClock.isNegativeEdge(),
             binarySignal: this.binaryClock.getSignal(),
+            binaryLastSignal: this.binaryClock.getLastSignal(),
+            binaryRisingEdge: this.binaryClock.isRisingEdge(),
+            binaryFallingEdge: this.binaryClock.isFallingEdge(),
             cpuSignal: this.cpuClock.getSignal(),
             cpuPhase: this.cpuClock.getPhase(),
             memorySignal: this.getMemoryClock(),
-            ioSignal: this.getIoClock()
+            ioSignal: this.getIoClock(),
+            hardwareTimers: timerStatus
         };
     }
 }
@@ -451,6 +673,6 @@ class ClockManager {
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
-        TernaryClock, BinaryClock, PulseCounter, ClockDivider, ClockManager
+        TernaryClock, BinaryClock, PulseCounter, ClockDivider, HardwareTimer, ClockManager
     };
 }

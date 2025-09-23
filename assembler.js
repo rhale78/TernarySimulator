@@ -29,6 +29,8 @@ class TernaryAssembler {
             'PSH': 40, 'POP': 41,
             'IN': 50, 'OUT': 51,
             'CLKR': 60, 'CLKS': 61, 'WAIT': 62,  // New timer/clock instructions
+            'TEDG': 63, 'BEDG': 64,              // Edge detection instructions
+            'TCRT': 65, 'TDEL': 66, 'TSET': 67, 'TSTA': 68, 'TSTP': 69, 'TSTS': 70,  // Hardware timer management
             'HLT': -13  // Fits in 3 trits
         };
 
