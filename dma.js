@@ -711,7 +711,6 @@ class DMAController {
         return stats;
     }
 }
-}
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {

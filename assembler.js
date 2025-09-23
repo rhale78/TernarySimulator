@@ -108,7 +108,18 @@ class TernaryAssembler {
             
             // Conversion operations (machine-level component-based)
             'T2B': 74,   // Ternary to binary conversion
-            'B2T': 75    // Binary to ternary conversion
+            'B2T': 75,   // Binary to ternary conversion
+            
+            // Enhanced clock and timer instructions
+            'TEDG': 87,  // Ternary edge detect
+            'BEDG': 88,  // Binary edge detect
+            'TCRT': 89,  // Timer create
+            'TDEL': 90,  // Timer delete
+            'TSET': 91,  // Timer set preset
+            'TSTA': 92,  // Timer start
+            'TSTP': 93,  // Timer stop
+            'TSTS': 94,  // Timer status
+            'CLKR': 95   // Clock read
         };
 
         // Register names

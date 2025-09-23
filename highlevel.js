@@ -467,6 +467,9 @@ class TernaryHighLevelCompiler {
             };
         }
         
+        throw new Error(`Unable to parse expression: ${expr}`);
+    }
+        
     parseLockStatement(text) {
         // Parse: lock(mutex_name) { ... }
         const match = text.match(/^lock\s*\(\s*(\w+)\s*\)\s*\{([\s\S]*)\}\s*$/);
@@ -521,21 +524,18 @@ class TernaryHighLevelCompiler {
         
         const [, functionName, args] = match;
         
-        const arguments = [];
+        const argList = [];
         if (args && args.trim()) {
-            const argList = args.split(',');
-            for (const arg of argList) {
-                arguments.push(this.parseExpression(arg.trim()));
+            const argTokens = args.split(',');
+            for (const arg of argTokens) {
+                argList.push(this.parseExpression(arg.trim()));
             }
         }
         
-        throw new Error(`Cannot parse expression: ${expr}`);
-    }
-
         return {
             type: 'thread',
             function: functionName,
-            arguments: arguments
+            arguments: argList
         };
     }
 
