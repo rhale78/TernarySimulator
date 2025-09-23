@@ -901,3 +901,184 @@ header h1 {
     color: #888;
     font-size: 10px;
 }
+
+/* Operating System Styles */
+.operating-system {
+    background-color: #2d2d2d;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.os-status {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-size: 12px;
+}
+
+.os-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.os-controls button {
+    background-color: #555;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.os-controls button:hover {
+    background-color: #666;
+}
+
+.os-shell {
+    margin-top: 10px;
+}
+
+.os-console {
+    background-color: #1a1a1a;
+    border: 1px solid #555;
+    border-radius: 4px;
+    height: 150px;
+    padding: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: #e0e0e0;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    margin-bottom: 5px;
+}
+
+.os-input {
+    width: 100%;
+    background-color: #333;
+    color: #e0e0e0;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+}
+
+.os-input:focus {
+    outline: none;
+    border-color: #777;
+}
+
+/* Snapshot System Styles */
+.snapshot-system {
+    background-color: #2d2d2d;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.snapshot-controls {
+    margin-bottom: 10px;
+}
+
+.snapshot-create {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.snapshot-create input {
+    background-color: #333;
+    color: #e0e0e0;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 11px;
+}
+
+.snapshot-create input:focus {
+    outline: none;
+    border-color: #777;
+}
+
+.snapshot-manage {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.snapshot-manage select {
+    background-color: #333;
+    color: #e0e0e0;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 11px;
+    min-width: 150px;
+}
+
+.snapshot-manage button {
+    background-color: #555;
+    color: white;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.snapshot-manage button:hover {
+    background-color: #666;
+}
+
+.snapshot-output {
+    background-color: #1a1a1a;
+    border: 1px solid #555;
+    border-radius: 4px;
+    height: 100px;
+    padding: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: #e0e0e0;
+    overflow-y: auto;
+    white-space: pre-wrap;
+}
+
+/* Virtual Disk Management Styles */
+.virtual-disk {
+    background-color: #2d2d2d;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.disk-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.disk-controls button {
+    background-color: #555;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.disk-controls button:hover {
+    background-color: #666;
+}
+
+.disk-info {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    font-size: 12px;
+    color: #e0e0e0;
+}

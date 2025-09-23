@@ -275,6 +275,57 @@
                         </div>
                         <div id="cacheOutput" class="cache-output"></div>
                     </div>
+                    
+                    <div class="operating-system">
+                        <h4>Balanced Ternary Operating System</h4>
+                        <div class="os-status">
+                            <div>Status: <span id="osStatus">Not Booted</span></div>
+                            <div>Shell: <span id="shellStatus">Inactive</span></div>
+                            <div>Processes: <span id="processCount">0</span></div>
+                        </div>
+                        <div class="os-controls">
+                            <button id="bootOSBtn">Boot OS</button>
+                            <button id="shutdownOSBtn">Shutdown OS</button>
+                        </div>
+                        <div class="os-shell">
+                            <div id="osConsole" class="os-console"></div>
+                            <input type="text" id="osCommandInput" placeholder="Enter OS command..." class="os-input">
+                        </div>
+                    </div>
+                    
+                    <div class="snapshot-system">
+                        <h4>System Snapshots</h4>
+                        <div class="snapshot-controls">
+                            <div class="snapshot-create">
+                                <input type="text" id="snapshotNameInput" placeholder="Snapshot name...">
+                                <input type="text" id="snapshotDescInput" placeholder="Description...">
+                                <button id="createSnapshotBtn">Create Snapshot</button>
+                            </div>
+                            <div class="snapshot-manage">
+                                <select id="snapshotSelect">
+                                    <option value="">Select a snapshot...</option>
+                                </select>
+                                <button id="loadSnapshotBtn">Load</button>
+                                <button id="exportSnapshotBtn">Export</button>
+                                <button id="importSnapshotBtn">Import</button>
+                                <button id="listSnapshotsBtn">List All</button>
+                            </div>
+                        </div>
+                        <div id="snapshotOutput" class="snapshot-output"></div>
+                    </div>
+                    
+                    <div class="virtual-disk">
+                        <h4>Virtual Disk Management</h4>
+                        <div class="disk-controls">
+                            <button id="loadDiskBtn">Load Disk File</button>
+                            <button id="saveDiskBtn">Save Disk File</button>
+                            <button id="createDiskBtn">Create New Disk</button>
+                        </div>
+                        <div class="disk-info">
+                            <div>Current Disk: <span id="currentDiskName">Default</span></div>
+                            <div>Files: <span id="diskFileCount">0</span> / <span id="diskMaxFiles">243</span></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -375,6 +426,8 @@
     <script src="memory.js"></script>
     <script src="assembler.js"></script>
     <script src="highlevel.js"></script>
+    <script src="os.js"></script>
+    <script src="snapshot.js"></script>
     <script src="simulator.js"></script>
 </body>
 </html>

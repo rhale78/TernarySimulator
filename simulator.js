@@ -16,6 +16,15 @@ class TernarySimulator {
         this.highlevelCompiler = null; // Initialize lazily
         this.io = new MemoryMappedIO(this.memory);
         
+        // Initialize disk drive
+        this.diskDrive = new VirtualDiskDrive();
+        
+        // Initialize operating system
+        this.os = new BalancedTernaryOS(this.cpu, this.memory, this.diskDrive);
+        
+        // Initialize snapshot manager
+        this.snapshotManager = new SnapshotManager(this);
+        
         this.isRunning = false;
         this.executionSpeed = 100; // Hz
         this.executionInterval = null;
@@ -125,6 +134,25 @@ class TernarySimulator {
             if (e.key === 'Enter') this.searchMemory();
         });
         
+        // Operating System controls
+        document.getElementById('bootOSBtn')?.addEventListener('click', () => this.bootOS());
+        document.getElementById('shutdownOSBtn')?.addEventListener('click', () => this.shutdownOS());
+        document.getElementById('osCommandInput')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.executeOSCommand();
+        });
+        
+        // Snapshot controls
+        document.getElementById('createSnapshotBtn')?.addEventListener('click', () => this.createSnapshot());
+        document.getElementById('loadSnapshotBtn')?.addEventListener('click', () => this.loadSnapshot());
+        document.getElementById('exportSnapshotBtn')?.addEventListener('click', () => this.exportSnapshot());
+        document.getElementById('importSnapshotBtn')?.addEventListener('click', () => this.importSnapshot());
+        document.getElementById('listSnapshotsBtn')?.addEventListener('click', () => this.listSnapshots());
+        
+        // Virtual disk management
+        document.getElementById('loadDiskBtn')?.addEventListener('click', () => this.loadVirtualDisk());
+        document.getElementById('saveDiskBtn')?.addEventListener('click', () => this.saveVirtualDisk());
+        document.getElementById('createDiskBtn')?.addEventListener('click', () => this.createVirtualDisk());
+        
         this.updateLineNumbers();
     }
 
@@ -153,9 +181,6 @@ class TernarySimulator {
         
         // Initialize ternary graphics display
         this.ternaryGraphics = new TernaryGraphicsDisplay(81, 81);
-        
-        // Initialize virtual disk drive
-        this.diskDrive = new VirtualDiskDrive();
         
         // Initialize DMA controller
         this.dmaController = new DMAController(this.memory);
@@ -841,6 +866,13 @@ class TernarySimulator {
         if (consoleOutput) {
             consoleOutput.textContent += text;
             consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+        
+        // Also output to OS console if it exists
+        const osConsole = document.getElementById('osConsole');
+        if (osConsole) {
+            osConsole.textContent += text;
+            osConsole.scrollTop = osConsole.scrollHeight;
         }
     }
 
@@ -1581,6 +1613,290 @@ Global Cycles: ${this.multiCore.globalCycleCount}`;
         } else {
             this.showMessage('Multi-core not configured', 'warning');
         }
+    }
+    
+    // Operating System methods
+    bootOS() {
+        try {
+            this.os.boot();
+            this.showMessage('Operating system booted successfully', 'success');
+            this.updateSystemStatus();
+        } catch (error) {
+            this.showMessage(`Failed to boot OS: ${error.message}`, 'error');
+        }
+    }
+    
+    shutdownOS() {
+        try {
+            this.os.shutdown();
+            this.showMessage('Operating system shut down', 'info');
+            this.updateSystemStatus();
+        } catch (error) {
+            this.showMessage(`Failed to shutdown OS: ${error.message}`, 'error');
+        }
+    }
+    
+    executeOSCommand() {
+        const input = document.getElementById('osCommandInput');
+        if (input && input.value.trim()) {
+            const command = input.value.trim();
+            this.os.processCommand(command);
+            input.value = '';
+        }
+    }
+    
+    // Snapshot methods
+    createSnapshot() {
+        try {
+            const nameInput = document.getElementById('snapshotNameInput');
+            const descInput = document.getElementById('snapshotDescInput');
+            
+            const name = nameInput ? nameInput.value.trim() : null;
+            const description = descInput ? descInput.value.trim() : '';
+            
+            const snapshot = this.snapshotManager.createSnapshot(name, description);
+            this.showMessage(`Snapshot '${snapshot.metadata.name}' created successfully`, 'success');
+            
+            // Clear inputs
+            if (nameInput) nameInput.value = '';
+            if (descInput) descInput.value = '';
+            
+            this.updateSnapshotList();
+        } catch (error) {
+            this.showMessage(`Failed to create snapshot: ${error.message}`, 'error');
+        }
+    }
+    
+    loadSnapshot() {
+        try {
+            const select = document.getElementById('snapshotSelect');
+            if (!select || !select.value) {
+                this.showMessage('Please select a snapshot to load', 'warning');
+                return;
+            }
+            
+            this.snapshotManager.restoreSnapshot(select.value);
+            this.showMessage(`Snapshot '${select.value}' loaded successfully`, 'success');
+        } catch (error) {
+            this.showMessage(`Failed to load snapshot: ${error.message}`, 'error');
+        }
+    }
+    
+    exportSnapshot() {
+        try {
+            const select = document.getElementById('snapshotSelect');
+            if (!select || !select.value) {
+                this.showMessage('Please select a snapshot to export', 'warning');
+                return;
+            }
+            
+            const filename = this.snapshotManager.exportSnapshotToFile(select.value);
+            this.showMessage(`Snapshot exported as '${filename}'`, 'success');
+        } catch (error) {
+            this.showMessage(`Failed to export snapshot: ${error.message}`, 'error');
+        }
+    }
+    
+    importSnapshot() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.bts,.json';
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                try {
+                    const snapshotName = await this.snapshotManager.importSnapshotFromFile(file);
+                    this.showMessage(`Snapshot '${snapshotName}' imported successfully`, 'success');
+                    this.updateSnapshotList();
+                } catch (error) {
+                    this.showMessage(`Failed to import snapshot: ${error.message}`, 'error');
+                }
+            }
+        };
+        input.click();
+    }
+    
+    listSnapshots() {
+        const snapshots = this.snapshotManager.listSnapshots();
+        const output = document.getElementById('snapshotOutput');
+        
+        if (output) {
+            let listing = 'Available Snapshots:\n\n';
+            if (snapshots.length === 0) {
+                listing += 'No snapshots available.';
+            } else {
+                for (const snapshot of snapshots) {
+                    const date = new Date(snapshot.timestamp).toLocaleString();
+                    const size = Math.round(snapshot.size / 1024);
+                    listing += `${snapshot.name}\n`;
+                    listing += `  Description: ${snapshot.description || 'No description'}\n`;
+                    listing += `  Created: ${date}\n`;
+                    listing += `  Size: ${size} KB\n\n`;
+                }
+            }
+            output.textContent = listing;
+        }
+        
+        this.updateSnapshotList();
+    }
+    
+    updateSnapshotList() {
+        const select = document.getElementById('snapshotSelect');
+        if (select) {
+            const snapshots = this.snapshotManager.listSnapshots();
+            select.innerHTML = '<option value="">Select a snapshot...</option>';
+            
+            for (const snapshot of snapshots) {
+                const option = document.createElement('option');
+                option.value = snapshot.name;
+                option.textContent = `${snapshot.name} (${new Date(snapshot.timestamp).toLocaleString()})`;
+                select.appendChild(option);
+            }
+        }
+    }
+    
+    // Virtual disk management methods
+    loadVirtualDisk() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.btd,.json'; // Balanced Ternary Disk
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                try {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const diskData = JSON.parse(event.target.result);
+                            this.loadDiskFromData(diskData);
+                            this.showMessage(`Virtual disk '${file.name}' loaded successfully`, 'success');
+                            this.updateDiskStatus();
+                        } catch (error) {
+                            this.showMessage(`Failed to parse disk file: ${error.message}`, 'error');
+                        }
+                    };
+                    reader.readAsText(file);
+                } catch (error) {
+                    this.showMessage(`Failed to load virtual disk: ${error.message}`, 'error');
+                }
+            }
+        };
+        input.click();
+    }
+    
+    saveVirtualDisk() {
+        try {
+            const diskData = this.exportDiskData();
+            const filename = `virtual_disk_${Date.now()}.btd`;
+            
+            const jsonData = JSON.stringify(diskData, null, 2);
+            const blob = new Blob([jsonData], { type: 'application/json' });
+            
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            this.showMessage(`Virtual disk saved as '${filename}'`, 'success');
+        } catch (error) {
+            this.showMessage(`Failed to save virtual disk: ${error.message}`, 'error');
+        }
+    }
+    
+    createVirtualDisk() {
+        try {
+            // Create a new empty virtual disk
+            this.diskDrive = new VirtualDiskDrive();
+            this.os.diskDrive = this.diskDrive;
+            
+            this.showMessage('New virtual disk created', 'success');
+            this.updateDiskStatus();
+        } catch (error) {
+            this.showMessage(`Failed to create virtual disk: ${error.message}`, 'error');
+        }
+    }
+    
+    loadDiskFromData(diskData) {
+        // Clear existing disk
+        this.diskDrive.files.clear();
+        this.diskDrive.directories.clear();
+        this.diskDrive.fileDescriptors.clear();
+        
+        // Restore directories
+        for (const [path, dir] of Object.entries(diskData.directories || {})) {
+            this.diskDrive.directories.set(path, {
+                name: dir.name,
+                parent: dir.parent,
+                children: new Set(dir.children),
+                created: dir.created,
+                modified: dir.modified
+            });
+        }
+        
+        // Restore files
+        for (const [path, file] of Object.entries(diskData.files || {})) {
+            this.diskDrive.files.set(path, {
+                name: file.name,
+                path: file.path,
+                data: file.data.map(str => new Tryte(str)),
+                size: file.size,
+                created: file.created,
+                modified: file.modified,
+                sector: file.sector
+            });
+        }
+        
+        // Restore disk properties
+        if (diskData.properties) {
+            Object.assign(this.diskDrive, diskData.properties);
+        }
+    }
+    
+    exportDiskData() {
+        const files = {};
+        for (const [path, file] of this.diskDrive.files) {
+            files[path] = {
+                name: file.name,
+                path: file.path,
+                data: file.data.map(tryte => tryte.toString()),
+                size: file.size,
+                created: file.created,
+                modified: file.modified,
+                sector: file.sector
+            };
+        }
+        
+        const directories = {};
+        for (const [path, dir] of this.diskDrive.directories) {
+            directories[path] = {
+                name: dir.name,
+                parent: dir.parent,
+                children: Array.from(dir.children),
+                created: dir.created,
+                modified: dir.modified
+            };
+        }
+        
+        return {
+            metadata: {
+                name: 'Virtual Disk',
+                created: Date.now(),
+                version: '1.0'
+            },
+            files: files,
+            directories: directories,
+            properties: {
+                currentDirectory: this.diskDrive.currentDirectory,
+                maxFiles: this.diskDrive.maxFiles,
+                totalSectors: this.diskDrive.totalSectors,
+                sectorSize: this.diskDrive.sectorSize,
+                usedSectors: this.diskDrive.usedSectors
+            }
+        };
     }
 }
 
