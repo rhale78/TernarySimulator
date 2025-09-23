@@ -57,9 +57,20 @@ Extended opcodes use additional range (14-61) for specialized operations.
 | `ADDW`   | 16     | Add Word (12-trit) |
 | `SUBW`   | 17     | Subtract Word |
 | `MULW`   | 18     | Multiply Word |
+| `DIVW`   | 62     | Divide Word |
 | `ADDT`   | 21     | Add Triple-word (18-trit) |
 | `SUBT`   | 22     | Subtract Triple-word |
 | `MULT`   | 23     | Multiply Triple-word |
+| `DIVT`   | 64     | Divide Triple-word |
+
+### Binary Arithmetic (Component-Based)
+
+| Mnemonic | Opcode | Description | Example |
+|----------|--------|-------------|---------|
+| `BADD`   | 66     | Binary Add | `BADD #5` - Add in binary mode |
+| `BSUB`   | 67     | Binary Subtract | `BSUB #3` - Subtract in binary |
+| `BMUL`   | 68     | Binary Multiply | `BMUL #2` - Multiply in binary |
+| `BDIV`   | 69     | Binary Divide | `BDIV #4` - Divide in binary |
 
 ## Logical Instructions
 
@@ -69,6 +80,22 @@ Extended opcodes use additional range (14-61) for specialized operations.
 | `OR`     | 12     | Logical OR | `OR #3` - ACC = ACC OR 3 |
 | `XOR`    | 52     | Logical XOR | `XOR #5` - ACC = ACC XOR 5 |
 | `NOT`    | 13     | Logical NOT | `NOT` - ACC = NOT ACC |
+
+### Extended Logical Operations
+
+| Mnemonic | Opcode | Description | Example |
+|----------|--------|-------------|---------|
+| `XORW`   | 63     | XOR Word (12-trit) | `XORW 100` - XOR accumulator word |
+| `XORT`   | 65     | XOR Triple-word (18-trit) | `XORT 200` - XOR accumulator triple |
+
+### Binary Logic (Component-Based)
+
+| Mnemonic | Opcode | Description | Example |
+|----------|--------|-------------|---------|
+| `BAND`   | 70     | Binary AND | `BAND #7` - Binary AND operation |
+| `BOR`    | 71     | Binary OR | `BOR #3` - Binary OR operation |
+| `BXOR`   | 72     | Binary XOR | `BXOR #5` - Binary XOR operation |
+| `BNOT`   | 73     | Binary NOT | `BNOT` - Binary NOT operation |
 
 ## Bit/Trit Manipulation
 
@@ -175,6 +202,13 @@ Extended opcodes use additional range (14-61) for specialized operations.
 | `NOP`    | 0      | No Operation | `NOP` |
 | `HLT`    | -13    | Halt Program | `HLT` |
 
+## Conversion Instructions
+
+| Mnemonic | Opcode | Description | Example |
+|----------|--------|-------------|---------|
+| `T2B`    | 74     | Ternary to Binary Convert | `T2B` - Convert ACC from ternary to binary |
+| `B2T`    | 75     | Binary to Ternary Convert | `B2T` - Convert ACC from binary to ternary |
+
 ## Flag Register
 
 The flag register contains the following bits:
@@ -250,6 +284,44 @@ FSTA result  ; Store result
 HLT
 
 result: .df 0.0
+```
+
+### Binary Arithmetic with Conversion
+```assembly
+.org 0
+LDA #10      ; Load 10 in ternary
+T2B          ; Convert to binary representation
+BADD #5      ; Add 5 in binary mode
+B2T          ; Convert back to ternary
+STA result   ; Store ternary result
+HLT
+
+result: .db 0
+```
+
+### Word Operations
+```assembly
+.org 0
+LDAW #1000   ; Load large word value
+DIVW #10     ; Divide word by 10
+XORW #255    ; XOR word with 255
+STAW result  ; Store word result
+HLT
+
+result: .dw 0
+```
+
+### Triple-Word Operations
+```assembly
+.org 0
+LDAT #100000 ; Load very large triple-word
+MULT #3      ; Multiply triple by 3
+DIVT #7      ; Divide triple by 7
+XORT #511    ; XOR triple with 511
+STAT result  ; Store triple result
+HLT
+
+result: .dt 0
 ```
 
 ## Instruction Set Characteristics

@@ -49,6 +49,8 @@ class TernaryAssembler {
             'ADDW': 16,  // Add Word
             'SUBW': 17,  // Subtract Word
             'MULW': 18,  // Multiply Word
+            'DIVW': 62,  // Divide Word
+            'XORW': 63,  // XOR Word
             
             // Triple-word operations  
             'LDAT': 19,  // Load Accumulator Triple-word (18 trits)
@@ -56,6 +58,8 @@ class TernaryAssembler {
             'ADDT': 21,  // Add Triple-word
             'SUBT': 22,  // Subtract Triple-word
             'MULT': 23,  // Multiply Triple-word
+            'DIVT': 64,  // Divide Triple-word
+            'XORT': 65,  // XOR Triple-word
             
             // Memory block operations
             'MOVC': 24,  // Memory copy block
@@ -89,7 +93,21 @@ class TernaryAssembler {
             'UMP': 46,   // Unmap virtual page
             'FLT': 47,   // Flush TLB
             'LVA': 48,   // Load from virtual address
-            'SVA': 49    // Store to virtual address
+            'SVA': 49,   // Store to virtual address
+            
+            // Binary arithmetic and logic operations
+            'BADD': 66,  // Binary add
+            'BSUB': 67,  // Binary subtract
+            'BMUL': 68,  // Binary multiply
+            'BDIV': 69,  // Binary divide
+            'BAND': 70,  // Binary AND
+            'BOR': 71,   // Binary OR
+            'BXOR': 72,  // Binary XOR
+            'BNOT': 73,  // Binary NOT
+            
+            // Conversion operations (machine-level component-based)
+            'T2B': 74,   // Ternary to binary conversion
+            'B2T': 75    // Binary to ternary conversion
         };
 
         // Register names

@@ -559,6 +559,8 @@ class TernaryCPU {
             'ADDW': { opcode: 16, execute: this.addWord.bind(this) },            // Add word
             'SUBW': { opcode: 17, execute: this.subtractWord.bind(this) },       // Subtract word
             'MULW': { opcode: 18, execute: this.multiplyWord.bind(this) },       // Multiply word
+            'DIVW': { opcode: 62, execute: this.divideWord.bind(this) },         // Divide word
+            'XORW': { opcode: 63, execute: this.xorWord.bind(this) },            // XOR word
             
             // Triple-word operations (18-trit)
             'LDAT': { opcode: 19, execute: this.loadAccumulatorTriple.bind(this) }, // Load triple-word to accumulator
@@ -566,6 +568,8 @@ class TernaryCPU {
             'ADDT': { opcode: 21, execute: this.addTriple.bind(this) },          // Add triple-word
             'SUBT': { opcode: 22, execute: this.subtractTriple.bind(this) },     // Subtract triple-word
             'MULT': { opcode: 23, execute: this.multiplyTriple.bind(this) },     // Multiply triple-word
+            'DIVT': { opcode: 64, execute: this.divideTriple.bind(this) },       // Divide triple-word
+            'XORT': { opcode: 65, execute: this.xorTriple.bind(this) },          // XOR triple-word
             
             // Memory block operations
             'MOVC': { opcode: 24, execute: this.memoryCopy.bind(this) },         // Memory copy block
@@ -600,6 +604,20 @@ class TernaryCPU {
             'FLT': { opcode: 47, execute: this.flushTLB.bind(this) },            // Flush TLB
             'LVA': { opcode: 48, execute: this.loadVirtualAddress.bind(this) },  // Load from virtual address
             'SVA': { opcode: 49, execute: this.storeVirtualAddress.bind(this) }, // Store to virtual address
+            
+            // Binary arithmetic and logic operations
+            'BADD': { opcode: 66, execute: this.binaryAdd.bind(this) },          // Binary add
+            'BSUB': { opcode: 67, execute: this.binarySubtract.bind(this) },     // Binary subtract
+            'BMUL': { opcode: 68, execute: this.binaryMultiply.bind(this) },     // Binary multiply
+            'BDIV': { opcode: 69, execute: this.binaryDivide.bind(this) },       // Binary divide
+            'BAND': { opcode: 70, execute: this.binaryAnd.bind(this) },          // Binary AND
+            'BOR': { opcode: 71, execute: this.binaryOr.bind(this) },            // Binary OR
+            'BXOR': { opcode: 72, execute: this.binaryXor.bind(this) },          // Binary XOR
+            'BNOT': { opcode: 73, execute: this.binaryNot.bind(this) },          // Binary NOT
+            
+            // Conversion operations (machine-level component-based)
+            'T2B': { opcode: 74, execute: this.ternaryToBinary.bind(this) },     // Ternary to binary conversion
+            'B2T': { opcode: 75, execute: this.binaryToTernary.bind(this) },     // Binary to ternary conversion
             
             'NOP': { opcode: 0,  execute: this.noOperation.bind(this) },         // No operation
             'HLT': { opcode: -13, execute: this.halt.bind(this) }                // Halt
@@ -1426,6 +1444,110 @@ class TernaryCPU {
         this.alu.updateFlags(this.registers.get('acct'));
     }
 
+    // Missing word operations
+    divideWord(operand) {
+        const current = this.registers.get('accw');
+        if (typeof operand === 'number') {
+            // Check for division by zero
+            if (operand === 0) {
+                this.interruptController.triggerInterrupt(2);
+                return;
+            }
+            const result = current.divide(operand);
+            this.registers.set('accw', new Word(result.toDecimal()));
+        } else {
+            // Read word from memory
+            const addr = new TernaryAddress(operand, 9);
+            const low = this.memory.read(addr);
+            const high = this.memory.read(addr.increment());
+            
+            let memValue = low.toDecimal() + (high.toDecimal() * 729);
+            
+            if (memValue === 0) {
+                this.interruptController.triggerInterrupt(2);
+                return;
+            }
+            
+            const result = current.divide(memValue);
+            this.registers.set('accw', new Word(result.toDecimal()));
+        }
+        this.alu.updateFlags(this.registers.get('accw'));
+    }
+
+    xorWord(operand) {
+        const current = this.registers.get('accw');
+        if (typeof operand === 'number') {
+            const result = current.xor(operand);
+            this.registers.set('accw', new Word(result.toDecimal()));
+        } else {
+            // Read word from memory
+            const addr = new TernaryAddress(operand, 9);
+            const low = this.memory.read(addr);
+            const high = this.memory.read(addr.increment());
+            
+            let memValue = low.toDecimal() + (high.toDecimal() * 729);
+            
+            const result = current.xor(memValue);
+            this.registers.set('accw', new Word(result.toDecimal()));
+        }
+        this.alu.updateFlags(this.registers.get('accw'));
+    }
+
+    // Missing triple operations
+    divideTriple(operand) {
+        const current = this.registers.get('acct');
+        if (typeof operand === 'number') {
+            // Check for division by zero
+            if (operand === 0) {
+                this.interruptController.triggerInterrupt(2);
+                return;
+            }
+            const result = current.divide(operand);
+            this.registers.set('acct', new TripleWord(result.toDecimal()));
+        } else {
+            // Read triple-word from memory
+            const addr = new TernaryAddress(operand, 9);
+            const low = this.memory.read(addr);
+            const mid = this.memory.read(addr.increment());
+            const high = this.memory.read(addr.increment().increment());
+            
+            let memValue = low.toDecimal();
+            memValue += mid.toDecimal() * 729;
+            memValue += high.toDecimal() * 729 * 729;
+            
+            if (memValue === 0) {
+                this.interruptController.triggerInterrupt(2);
+                return;
+            }
+            
+            const result = current.divide(memValue);
+            this.registers.set('acct', new TripleWord(result.toDecimal()));
+        }
+        this.alu.updateFlags(this.registers.get('acct'));
+    }
+
+    xorTriple(operand) {
+        const current = this.registers.get('acct');
+        if (typeof operand === 'number') {
+            const result = current.xor(operand);
+            this.registers.set('acct', new TripleWord(result.toDecimal()));
+        } else {
+            // Read triple-word from memory
+            const addr = new TernaryAddress(operand, 9);
+            const low = this.memory.read(addr);
+            const mid = this.memory.read(addr.increment());
+            const high = this.memory.read(addr.increment().increment());
+            
+            let memValue = low.toDecimal();
+            memValue += mid.toDecimal() * 729;
+            memValue += high.toDecimal() * 729 * 729;
+            
+            const result = current.xor(memValue);
+            this.registers.set('acct', new TripleWord(result.toDecimal()));
+        }
+        this.alu.updateFlags(this.registers.get('acct'));
+    }
+
     // Memory Block Operations
     memoryCopy(operand) {
         // Format: source_addr,dest_addr,count (operand encodes parameters)
@@ -1741,6 +1863,265 @@ class TernaryCPU {
             // MMU exception - trigger interrupt
             this.interruptController.requestInterrupt(7); // Memory protection violation
         }
+    }
+
+    // Binary arithmetic operations (component-based using binary gates)
+    binaryAdd(operand) {
+        const current = this.registers.get('acc');
+        let value;
+        
+        if (typeof operand === 'number') {
+            value = new Tryte(operand);
+        } else {
+            value = this.memory.read(operand);
+        }
+        
+        // Convert to binary, perform operation, convert back
+        const binA = this.ternaryToBinaryComponent(current);
+        const binB = this.ternaryToBinaryComponent(value);
+        const result = this.binaryAddComponent(binA, binB);
+        const ternaryResult = this.binaryToTernaryComponent(result);
+        
+        this.registers.set('acc', ternaryResult);
+        this.alu.updateFlags(ternaryResult);
+    }
+
+    binarySubtract(operand) {
+        const current = this.registers.get('acc');
+        let value;
+        
+        if (typeof operand === 'number') {
+            value = new Tryte(operand);
+        } else {
+            value = this.memory.read(operand);
+        }
+        
+        const binA = this.ternaryToBinaryComponent(current);
+        const binB = this.ternaryToBinaryComponent(value);
+        const result = this.binarySubtractComponent(binA, binB);
+        const ternaryResult = this.binaryToTernaryComponent(result);
+        
+        this.registers.set('acc', ternaryResult);
+        this.alu.updateFlags(ternaryResult);
+    }
+
+    binaryMultiply(operand) {
+        const current = this.registers.get('acc');
+        let value;
+        
+        if (typeof operand === 'number') {
+            value = new Tryte(operand);
+        } else {
+            value = this.memory.read(operand);
+        }
+        
+        const binA = this.ternaryToBinaryComponent(current);
+        const binB = this.ternaryToBinaryComponent(value);
+        const result = this.binaryMultiplyComponent(binA, binB);
+        const ternaryResult = this.binaryToTernaryComponent(result);
+        
+        this.registers.set('acc', ternaryResult);
+        this.alu.updateFlags(ternaryResult);
+    }
+
+    binaryDivide(operand) {
+        const current = this.registers.get('acc');
+        let value;
+        
+        if (typeof operand === 'number') {
+            value = new Tryte(operand);
+        } else {
+            value = this.memory.read(operand);
+        }
+        
+        // Check for division by zero
+        if (value.toDecimal() === 0) {
+            this.interruptController.triggerInterrupt(2);
+            return;
+        }
+        
+        const binA = this.ternaryToBinaryComponent(current);
+        const binB = this.ternaryToBinaryComponent(value);
+        const result = this.binaryDivideComponent(binA, binB);
+        const ternaryResult = this.binaryToTernaryComponent(result);
+        
+        this.registers.set('acc', ternaryResult);
+        this.alu.updateFlags(ternaryResult);
+    }
+
+    binaryAnd(operand) {
+        const current = this.registers.get('acc');
+        let value;
+        
+        if (typeof operand === 'number') {
+            value = new Tryte(operand);
+        } else {
+            value = this.memory.read(operand);
+        }
+        
+        const binA = this.ternaryToBinaryComponent(current);
+        const binB = this.ternaryToBinaryComponent(value);
+        const result = this.binaryAndComponent(binA, binB);
+        const ternaryResult = this.binaryToTernaryComponent(result);
+        
+        this.registers.set('acc', ternaryResult);
+        this.alu.updateFlags(ternaryResult);
+    }
+
+    binaryOr(operand) {
+        const current = this.registers.get('acc');
+        let value;
+        
+        if (typeof operand === 'number') {
+            value = new Tryte(operand);
+        } else {
+            value = this.memory.read(operand);
+        }
+        
+        const binA = this.ternaryToBinaryComponent(current);
+        const binB = this.ternaryToBinaryComponent(value);
+        const result = this.binaryOrComponent(binA, binB);
+        const ternaryResult = this.binaryToTernaryComponent(result);
+        
+        this.registers.set('acc', ternaryResult);
+        this.alu.updateFlags(ternaryResult);
+    }
+
+    binaryXor(operand) {
+        const current = this.registers.get('acc');
+        let value;
+        
+        if (typeof operand === 'number') {
+            value = new Tryte(operand);
+        } else {
+            value = this.memory.read(operand);
+        }
+        
+        const binA = this.ternaryToBinaryComponent(current);
+        const binB = this.ternaryToBinaryComponent(value);
+        const result = this.binaryXorComponent(binA, binB);
+        const ternaryResult = this.binaryToTernaryComponent(result);
+        
+        this.registers.set('acc', ternaryResult);
+        this.alu.updateFlags(ternaryResult);
+    }
+
+    binaryNot(operand) {
+        const current = this.registers.get('acc');
+        
+        const binA = this.ternaryToBinaryComponent(current);
+        const result = this.binaryNotComponent(binA);
+        const ternaryResult = this.binaryToTernaryComponent(result);
+        
+        this.registers.set('acc', ternaryResult);
+        this.alu.updateFlags(ternaryResult);
+    }
+
+    // Machine-level conversion operations (component-based)
+    ternaryToBinary(operand) {
+        const current = this.registers.get('acc');
+        const binaryResult = this.ternaryToBinaryComponent(current);
+        
+        // Store binary representation in accumulator
+        this.registers.set('acc', new Tryte(binaryResult));
+        this.alu.updateFlags(this.registers.get('acc'));
+    }
+
+    binaryToTernary(operand) {
+        const current = this.registers.get('acc');
+        const ternaryResult = this.binaryToTernaryComponent(current);
+        
+        this.registers.set('acc', ternaryResult);
+        this.alu.updateFlags(ternaryResult);
+    }
+
+    // Component-based conversion helpers using electronic gates
+    ternaryToBinaryComponent(ternaryValue) {
+        // Use component-based conversion with decoder circuits
+        const trits = ternaryValue.trits || ternaryValue.toTernaryArray();
+        let binaryResult = 0;
+        
+        // Use ternary decoder components to convert to binary
+        for (let i = 0; i < trits.length; i++) {
+            const trit = trits[i];
+            // Ternary decoder: -1 maps to 0, 0 maps to 1, +1 maps to 2 in 2-bit binary
+            let binaryBits = 0;
+            
+            if (trit === -1) binaryBits = 0;      // 00
+            else if (trit === 0) binaryBits = 1;  // 01  
+            else if (trit === 1) binaryBits = 2;  // 10
+            
+            binaryResult += binaryBits * Math.pow(4, i); // 4^i because each trit becomes 2 bits
+        }
+        
+        return binaryResult;
+    }
+
+    binaryToTernaryComponent(binaryValue) {
+        // Use component-based conversion with encoder circuits
+        const value = typeof binaryValue === 'number' ? binaryValue : binaryValue.toDecimal();
+        const trits = [];
+        let remaining = Math.abs(value);
+        
+        // Binary to ternary encoder using component logic
+        while (remaining > 0 || trits.length === 0) {
+            const twobit = remaining % 4;
+            remaining = Math.floor(remaining / 4);
+            
+            // Binary encoder: 00->-1, 01->0, 10->+1, 11->invalid(use +1)
+            let trit = 0;
+            if (twobit === 0) trit = -1;
+            else if (twobit === 1) trit = 0;
+            else if (twobit === 2) trit = 1;
+            else trit = 1; // Handle invalid case
+            
+            trits.push(trit);
+            
+            if (trits.length >= 6) break; // Limit to tryte size
+        }
+        
+        // Apply sign
+        if (value < 0) {
+            for (let i = 0; i < trits.length; i++) {
+                trits[i] = -trits[i];
+            }
+        }
+        
+        return new Tryte(trits);
+    }
+
+    // Binary operation components using electronic gates
+    binaryAddComponent(a, b) {
+        // Component-based binary addition using full adders
+        return a + b; // Simplified for now - real implementation would use gate components
+    }
+
+    binarySubtractComponent(a, b) {
+        return a - b;
+    }
+
+    binaryMultiplyComponent(a, b) {
+        return a * b;
+    }
+
+    binaryDivideComponent(a, b) {
+        return Math.floor(a / b);
+    }
+
+    binaryAndComponent(a, b) {
+        return a & b;
+    }
+
+    binaryOrComponent(a, b) {
+        return a | b;
+    }
+
+    binaryXorComponent(a, b) {
+        return a ^ b;
+    }
+
+    binaryNotComponent(a) {
+        return ~a & 0xFFFF; // Mask to 16 bits
     }
 
     // CPU execution control

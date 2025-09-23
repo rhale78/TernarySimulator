@@ -614,6 +614,43 @@ class TernaryHighLevelCompiler {
                 case '*':
                     this.output.push(`MUL #${expr.right.value}`);
                     break;
+                case '/':
+                    this.output.push(`DIV #${expr.right.value}`);
+                    break;
+                case '%':
+                    this.output.push(`MOD #${expr.right.value}`);
+                    break;
+                case '^':
+                    this.output.push(`XOR #${expr.right.value}`);
+                    break;
+                case '&':
+                    this.output.push(`AND #${expr.right.value}`);
+                    break;
+                case '|':
+                    this.output.push(`OR #${expr.right.value}`);
+                    break;
+                // Binary mode operations (prefixed with b)
+                case 'b+':
+                    this.output.push(`BADD #${expr.right.value}`);
+                    break;
+                case 'b-':
+                    this.output.push(`BSUB #${expr.right.value}`);
+                    break;
+                case 'b*':
+                    this.output.push(`BMUL #${expr.right.value}`);
+                    break;
+                case 'b/':
+                    this.output.push(`BDIV #${expr.right.value}`);
+                    break;
+                case 'b&':
+                    this.output.push(`BAND #${expr.right.value}`);
+                    break;
+                case 'b|':
+                    this.output.push(`BOR #${expr.right.value}`);
+                    break;
+                case 'b^':
+                    this.output.push(`BXOR #${expr.right.value}`);
+                    break;
                 default:
                     throw new Error(`Unsupported operator: ${expr.operator}`);
             }
@@ -643,6 +680,43 @@ class TernaryHighLevelCompiler {
                     break;
                 case '*':
                     this.output.push(`MUL ${tempAddr2}`);
+                    break;
+                case '/':
+                    this.output.push(`DIV ${tempAddr2}`);
+                    break;
+                case '%':
+                    this.output.push(`MOD ${tempAddr2}`);
+                    break;
+                case '^':
+                    this.output.push(`XOR ${tempAddr2}`);
+                    break;
+                case '&':
+                    this.output.push(`AND ${tempAddr2}`);
+                    break;
+                case '|':
+                    this.output.push(`OR ${tempAddr2}`);
+                    break;
+                // Binary mode operations
+                case 'b+':
+                    this.output.push(`BADD ${tempAddr2}`);
+                    break;
+                case 'b-':
+                    this.output.push(`BSUB ${tempAddr2}`);
+                    break;
+                case 'b*':
+                    this.output.push(`BMUL ${tempAddr2}`);
+                    break;
+                case 'b/':
+                    this.output.push(`BDIV ${tempAddr2}`);
+                    break;
+                case 'b&':
+                    this.output.push(`BAND ${tempAddr2}`);
+                    break;
+                case 'b|':
+                    this.output.push(`BOR ${tempAddr2}`);
+                    break;
+                case 'b^':
+                    this.output.push(`BXOR ${tempAddr2}`);
                     break;
                 default:
                     throw new Error(`Unsupported operator: ${expr.operator}`);
@@ -711,6 +785,74 @@ class TernaryHighLevelCompiler {
                 this.output.push(`; print(...)`);
                 this.generateExpression(statement.arguments[0]);
                 this.output.push('OUT');
+                this.output.push('');
+                break;
+            case 'ternaryToBinary':
+                this.output.push(`; ternaryToBinary()`);
+                if (statement.arguments.length === 1) {
+                    this.generateExpression(statement.arguments[0]);
+                }
+                this.output.push('T2B');
+                this.output.push('');
+                break;
+            case 'binaryToTernary':
+                this.output.push(`; binaryToTernary()`);
+                if (statement.arguments.length === 1) {
+                    this.generateExpression(statement.arguments[0]);
+                }
+                this.output.push('B2T');
+                this.output.push('');
+                break;
+            case 'binaryNot':
+                this.output.push(`; binaryNot()`);
+                if (statement.arguments.length === 1) {
+                    this.generateExpression(statement.arguments[0]);
+                }
+                this.output.push('BNOT');
+                this.output.push('');
+                break;
+            case 'wordDivide':
+                if (statement.arguments.length !== 2) {
+                    throw new Error('wordDivide() requires exactly two arguments');
+                }
+                this.output.push(`; wordDivide(...)`);
+                this.generateExpression(statement.arguments[0]);
+                this.output.push('LDAW');
+                this.generateExpression(statement.arguments[1]);
+                this.output.push('DIVW');
+                this.output.push('');
+                break;
+            case 'tripleDivide':
+                if (statement.arguments.length !== 2) {
+                    throw new Error('tripleDivide() requires exactly two arguments');
+                }
+                this.output.push(`; tripleDivide(...)`);
+                this.generateExpression(statement.arguments[0]);
+                this.output.push('LDAT');
+                this.generateExpression(statement.arguments[1]);
+                this.output.push('DIVT');
+                this.output.push('');
+                break;
+            case 'wordXor':
+                if (statement.arguments.length !== 2) {
+                    throw new Error('wordXor() requires exactly two arguments');
+                }
+                this.output.push(`; wordXor(...)`);
+                this.generateExpression(statement.arguments[0]);
+                this.output.push('LDAW');
+                this.generateExpression(statement.arguments[1]);
+                this.output.push('XORW');
+                this.output.push('');
+                break;
+            case 'tripleXor':
+                if (statement.arguments.length !== 2) {
+                    throw new Error('tripleXor() requires exactly two arguments');
+                }
+                this.output.push(`; tripleXor(...)`);
+                this.generateExpression(statement.arguments[0]);
+                this.output.push('LDAT');
+                this.generateExpression(statement.arguments[1]);
+                this.output.push('XORT');
                 this.output.push('');
                 break;
             default:
