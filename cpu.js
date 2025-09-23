@@ -84,19 +84,25 @@ class TernaryALU {
         }
     }
 
-    // Update flags based on result
+    // Update flags based on result using component-based ternary logic
     updateFlags(result) {
-        const decimal = result.toDecimal();
+        // Use ternary logic to determine flags without host CPU conversion
         
-        // Set flags as trits: 1 for true condition, 0 for neutral, -1 for opposite
-        this.flags.zero = decimal === 0 ? 1 : 0;
-        this.flags.positive = decimal > 0 ? 1 : (decimal < 0 ? -1 : 0);
-        this.flags.negative = decimal < 0 ? 1 : (decimal > 0 ? -1 : 0);
+        // Zero flag: check if all trits are zero using ternary comparison
+        this.flags.zero = result.isZero(result) ? 1 : 0;
         
-        // Check for overflow/underflow (result exceeds tryte range)
-        if (decimal > Tryte.MAX_VALUE) {
+        // Sign flags: check most significant non-zero trit
+        const isNeg = result.isNegative();
+        this.flags.positive = isNeg ? -1 : (this.flags.zero ? 0 : 1);
+        this.flags.negative = isNeg ? 1 : -1;
+        
+        // Check for overflow/underflow using ternary comparison with max values
+        const maxTryte = new BalancedTernary(Tryte.MAX_VALUE);
+        const minTryte = new BalancedTernary(Tryte.MIN_VALUE);
+        
+        if (result.compareComponents(result, maxTryte) > 0) {
             this.flags.overflow = 1;  // Overflow
-        } else if (decimal < Tryte.MIN_VALUE) {
+        } else if (result.compareComponents(result, minTryte) < 0) {
             this.flags.overflow = -1; // Underflow
         } else {
             this.flags.overflow = 0;  // No overflow
