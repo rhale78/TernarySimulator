@@ -128,6 +128,22 @@ class TernaryALU {
         return this.lastResult;
     }
 
+    divide(a, b) {
+        this.lastOperation = 'DIV';
+        const result = a.divide(b);
+        this.lastResult = new Tryte(result.trits);
+        this.updateFlags(this.lastResult);
+        return this.lastResult;
+    }
+
+    modulo(a, b) {
+        this.lastOperation = 'MOD';
+        const result = a.modulo(b);
+        this.lastResult = new Tryte(result.trits);
+        this.updateFlags(this.lastResult);
+        return this.lastResult;
+    }
+
     // Logical operations
     and(a, b) {
         this.lastOperation = 'AND';
@@ -461,6 +477,8 @@ class TernaryCPU {
             'ADD': { opcode: 6, execute: this.addToAccumulator.bind(this) },     // Add to accumulator
             'SUB': { opcode: 7, execute: this.subtractFromAccumulator.bind(this) }, // Subtract from accumulator
             'MUL': { opcode: 8, execute: this.multiplyAccumulator.bind(this) },  // Multiply accumulator
+            'DIV': { opcode: 50, execute: this.divideAccumulator.bind(this) },   // Divide accumulator
+            'MOD': { opcode: 51, execute: this.moduloAccumulator.bind(this) },   // Modulo operation
             'INC': { opcode: 9, execute: this.incrementRegister.bind(this) },    // Increment register
             'DEC': { opcode: 10, execute: this.decrementRegister.bind(this) },   // Decrement register
             
@@ -636,6 +654,46 @@ class TernaryCPU {
     decrementRegister(operand) {
         const acc = this.registers.get('acc');
         const result = this.alu.decrement(acc);
+        this.registers.set('acc', result);
+        this.registers.set('flags', this.alu.getFlagsAsTrits());
+    }
+
+    divideAccumulator(operand) {
+        let divisor;
+        if (typeof operand === 'number') {
+            divisor = new Tryte(operand);
+        } else {
+            divisor = this.memory.read(operand);
+        }
+        
+        // Check for division by zero
+        if (divisor.toDecimal() === 0) {
+            // Trigger division by zero interrupt (interrupt vector 2)
+            this.interruptController.triggerInterrupt(2);
+            return;
+        }
+        
+        const result = this.alu.divide(this.registers.get('acc'), divisor);
+        this.registers.set('acc', result);
+        this.registers.set('flags', this.alu.getFlagsAsTrits());
+    }
+
+    moduloAccumulator(operand) {
+        let divisor;
+        if (typeof operand === 'number') {
+            divisor = new Tryte(operand);
+        } else {
+            divisor = this.memory.read(operand);
+        }
+        
+        // Check for division by zero
+        if (divisor.toDecimal() === 0) {
+            // Trigger division by zero interrupt (interrupt vector 2)
+            this.interruptController.triggerInterrupt(2);
+            return;
+        }
+        
+        const result = this.alu.modulo(this.registers.get('acc'), divisor);
         this.registers.set('acc', result);
         this.registers.set('flags', this.alu.getFlagsAsTrits());
     }

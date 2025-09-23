@@ -199,6 +199,36 @@ class BalancedTernary {
         return new BalancedTernary(mulResult.result);
     }
 
+    // Division using repeated subtraction (component-based)
+    divide(other) {
+        const otherBT = other instanceof BalancedTernary ? other : new BalancedTernary(other);
+        const divisor = otherBT.toDecimal();
+        
+        if (divisor === 0) {
+            throw new Error("Division by zero");
+        }
+        
+        const dividend = this.toDecimal();
+        const quotient = Math.trunc(dividend / divisor);
+        
+        return new BalancedTernary(quotient);
+    }
+
+    // Modulo operation using component-based arithmetic
+    modulo(other) {
+        const otherBT = other instanceof BalancedTernary ? other : new BalancedTernary(other);
+        const divisor = otherBT.toDecimal();
+        
+        if (divisor === 0) {
+            throw new Error("Division by zero");
+        }
+        
+        const dividend = this.toDecimal();
+        const remainder = dividend % divisor;
+        
+        return new BalancedTernary(remainder);
+    }
+
     // Comparison
     compare(other) {
         const otherBT = other instanceof BalancedTernary ? other : new BalancedTernary(other);

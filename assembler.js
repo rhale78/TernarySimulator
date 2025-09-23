@@ -27,7 +27,7 @@ class TernaryAssembler {
             // Core data movement
             'LDA': 1, 'STA': 2, 'LDX': 3, 'STX': 4, 'MOV': 5,
             // Core arithmetic 
-            'ADD': 6, 'SUB': 7, 'MUL': 8, 'INC': 9, 'DEC': 10,
+            'ADD': 6, 'SUB': 7, 'MUL': 8, 'DIV': 50, 'MOD': 51, 'INC': 9, 'DEC': 10,
             // Core logical
             'AND': 11, 'OR': 12, 'NOT': 13,
             // Control flow
