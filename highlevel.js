@@ -855,9 +855,129 @@ class TernaryHighLevelCompiler {
                 this.output.push('XORT');
                 this.output.push('');
                 break;
+            // Add standard library functions
+            case 'strlen':
+                this.generateStrlen(statement);
+                break;
+            case 'strcpy':
+                this.generateStrcpy(statement);
+                break;
+            case 'abs':
+                this.generateAbs(statement);
+                break;
+            case 'pow':
+                this.generatePow(statement);
+                break;
+            case 'printf':
+                this.generatePrintf(statement);
+                break;
+            case 'scanf':
+                this.generateScanf(statement);
+                break;
             default:
-                throw new Error(`Unknown function: ${statement.name}`);
+                // Check if this is a user-defined function
+                if (this.functions.has(statement.name)) {
+                    this.generateUserFunctionCall(statement);
+                } else {
+                    throw new Error(`Unknown function: ${statement.name}`);
+                }
         }
+    }
+
+    generateUserFunctionCall(statement) {
+        const func = this.functions.get(statement.name);
+        
+        if (statement.arguments.length !== func.parameters.length) {
+            throw new Error(`Function ${statement.name} expects ${func.parameters.length} arguments, got ${statement.arguments.length}`);
+        }
+        
+        this.output.push(`; Function call: ${statement.name}`);
+        
+        // Push arguments onto stack in reverse order (right to left)
+        for (let i = statement.arguments.length - 1; i >= 0; i--) {
+            this.generateExpression(statement.arguments[i]);
+            this.output.push('PSH'); // Push argument onto stack
+        }
+        
+        // Call the function
+        this.output.push(`CALL ${statement.name}_func`);
+        
+        // Clean up stack (remove arguments)
+        for (let i = 0; i < statement.arguments.length; i++) {
+            this.output.push('POP'); // Remove arguments from stack
+        }
+        
+        this.output.push(''); // Add blank line
+    }
+
+    // Standard library function implementations
+    generateStrlen(statement) {
+        if (statement.arguments.length !== 1) {
+            throw new Error('strlen() requires exactly one argument');
+        }
+        this.output.push(`; strlen(...)`);
+        this.generateExpression(statement.arguments[0]); // String address
+        this.output.push('CALL strlen_func');
+        this.output.push('');
+    }
+
+    generateStrcpy(statement) {
+        if (statement.arguments.length !== 2) {
+            throw new Error('strcpy() requires exactly two arguments');
+        }
+        this.output.push(`; strcpy(dest, src)`);
+        this.generateExpression(statement.arguments[1]); // Source
+        this.output.push('PSH');
+        this.generateExpression(statement.arguments[0]); // Destination
+        this.output.push('CALL strcpy_func');
+        this.output.push('POP'); // Clean up stack
+        this.output.push('');
+    }
+
+    generateAbs(statement) {
+        if (statement.arguments.length !== 1) {
+            throw new Error('abs() requires exactly one argument');
+        }
+        this.output.push(`; abs(...)`);
+        this.generateExpression(statement.arguments[0]);
+        this.output.push('CALL abs_func');
+        this.output.push('');
+    }
+
+    generatePow(statement) {
+        if (statement.arguments.length !== 2) {
+            throw new Error('pow() requires exactly two arguments');
+        }
+        this.output.push(`; pow(base, exponent)`);
+        this.generateExpression(statement.arguments[1]); // Exponent
+        this.output.push('PSH');
+        this.generateExpression(statement.arguments[0]); // Base
+        this.output.push('CALL pow_func');
+        this.output.push('POP'); // Clean up stack
+        this.output.push('');
+    }
+
+    generatePrintf(statement) {
+        // Simplified printf - just print the first argument for now
+        if (statement.arguments.length === 0) {
+            throw new Error('printf() requires at least one argument');
+        }
+        this.output.push(`; printf(...)`);
+        this.generateExpression(statement.arguments[0]);
+        this.output.push('OUT');
+        this.output.push('');
+    }
+
+    generateScanf(statement) {
+        // Simplified scanf - read into first argument
+        if (statement.arguments.length === 0) {
+            throw new Error('scanf() requires at least one argument');
+        }
+        this.output.push(`; scanf(...)`);
+        this.output.push('IN'); // Read input
+        // Store into the variable (simplified)
+        this.output.push('OUT'); // Echo for now
+        this.output.push('');
     }
 
     generateArrayDeclaration(statement) {
@@ -879,21 +999,49 @@ class TernaryHighLevelCompiler {
     }
 
     generateFunction(statement) {
-        this.output.push(`; Function ${statement.name}`);
-        this.output.push(`${statement.name}:`);
+        const func = this.functions.get(statement.name);
         
-        // Simple function generation - would need more sophisticated handling for real implementation
+        this.output.push(`${statement.name}_func:`);
+        this.output.push(`; Function: ${statement.name}`);
+        
+        // Set up stack frame
+        this.output.push('PSH R1'); // Save old frame pointer
+        this.output.push('LDA SP'); // Get current stack pointer
+        this.output.push('STA R1'); // Set new frame pointer
+        
+        // Reserve space for local variables
+        const localVarCount = func ? func.localVars.size : 0;
+        if (localVarCount > 0) {
+            this.output.push(`LDA #${localVarCount}`);
+            this.output.push('ADD SP');
+            this.output.push('STA SP'); // Adjust stack pointer
+        }
+        
+        // Generate function body 
         for (let bodyLine of statement.body) {
             if (bodyLine.trim()) {
-                const stmt = this.parseStatement(bodyLine.trim());
-                if (stmt) {
-                    this.generateStatement(stmt);
+                try {
+                    const stmt = this.parseStatement(bodyLine.trim());
+                    if (stmt) {
+                        this.generateStatement(stmt);
+                    }
+                } catch (e) {
+                    // Simple statement generation for now
+                    this.output.push(`; ${bodyLine.trim()}`);
                 }
             }
         }
         
+        // Function epilogue
+        this.output.push(`${statement.name}_func_end:`);
+        this.output.push('LDA R1'); // Restore stack pointer from frame pointer
+        this.output.push('STA SP');
+        this.output.push('POP R1'); // Restore old frame pointer
+        
         if (statement.returnType !== 'void') {
-            this.output.push('RTS');
+            this.output.push('RET'); // Return value in ACC
+        } else {
+            this.output.push('RET'); // Return to caller
         }
         this.output.push('');
     }
