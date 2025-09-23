@@ -186,7 +186,16 @@ class TernarySimulator {
             'regACC': state.registers.acc,
             'regIX': state.registers.ix,
             'regSP': state.registers.sp,
-            'regFLAGS': state.registers.flags
+            'regFLAGS': state.registers.flags,
+            'regR1': state.registers.r1,
+            'regR2': state.registers.r2,
+            'regR3': state.registers.r3,
+            'regR4': state.registers.r4,
+            'regR5': state.registers.r5,
+            'regR6': state.registers.r6,
+            'regR7': state.registers.r7,
+            'regR8': state.registers.r8,
+            'regR9': state.registers.r9
         };
 
         for (let [elementId, value] of Object.entries(regMap)) {
@@ -196,6 +205,30 @@ class TernarySimulator {
                 // Add visual highlighting for changed values
                 element.classList.add('highlight');
                 setTimeout(() => element.classList.remove('highlight'), 500);
+            }
+        }
+
+        // Update individual flag displays
+        const flags = this.cpu.alu.flags;
+        const flagMap = {
+            'flagZero': flags.zero,
+            'flagPositive': flags.positive,
+            'flagNegative': flags.negative,
+            'flagCarry': flags.carry,
+            'flagOverflow': flags.overflow
+        };
+
+        for (let [elementId, value] of Object.entries(flagMap)) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                // Display trit values with appropriate styling
+                element.textContent = value;
+                element.className = 'flag-value';
+                if (value === 1) {
+                    element.classList.add('flag-positive');
+                } else if (value === -1) {
+                    element.classList.add('flag-negative');
+                }
             }
         }
     }

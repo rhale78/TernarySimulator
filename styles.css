@@ -225,6 +225,59 @@ header h1 {
     border-radius: 3px;
 }
 
+/* Flags Section */
+.flags-section {
+    margin-bottom: 15px;
+}
+
+.flags-section h4 {
+    color: #FF9800;
+    margin-bottom: 10px;
+}
+
+.flag-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.flag {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #1a1a1a;
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid #555;
+}
+
+.flag label {
+    color: #ccc;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.flag-value {
+    color: #FF9800;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    background-color: #333;
+    padding: 1px 4px;
+    border-radius: 3px;
+    min-width: 20px;
+    text-align: center;
+}
+
+.flag-value.flag-positive {
+    color: #4CAF50;
+    background-color: #1B5E20;
+}
+
+.flag-value.flag-negative {
+    color: #F44336;
+    background-color: #B71C1C;
+}
+
 /* ALU Display */
 .alu-section h4 {
     color: #4CAF50;

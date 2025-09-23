@@ -34,7 +34,7 @@ class TernaryAssembler {
         // Register names
         this.registers = {
             'ACC': 0, 'IX': 1, 'PC': 2, 'SP': 3, 'FLAGS': 4,
-            'R1': 5, 'R2': 6, 'R3': 7
+            'R1': 5, 'R2': 6, 'R3': 7, 'R4': 8, 'R5': 9, 'R6': 10, 'R7': 11, 'R8': 12, 'R9': 13
         };
 
         // Addressing modes
