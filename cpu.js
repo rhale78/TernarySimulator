@@ -16,12 +16,13 @@ class TernaryALU {
     constructor() {
         this.lastOperation = null;
         this.lastResult = null;
+        // Trit-based flags: -1 (negative), 0 (neutral/false), 1 (positive/true)
         this.flags = {
-            zero: false,
-            positive: false,
-            negative: false,
-            overflow: false,
-            carry: false
+            zero: 0,      // -1: not zero, 0: neutral, 1: zero
+            positive: 0,  // -1: not positive, 0: neutral, 1: positive
+            negative: 0,  // -1: not negative, 0: neutral, 1: negative
+            overflow: 0,  // -1: underflow, 0: no overflow, 1: overflow
+            carry: 0      // -1: borrow, 0: no carry, 1: carry
         };
     }
 
@@ -29,12 +30,19 @@ class TernaryALU {
     updateFlags(result) {
         const decimal = result.toDecimal();
         
-        this.flags.zero = decimal === 0;
-        this.flags.positive = decimal > 0;
-        this.flags.negative = decimal < 0;
+        // Set flags as trits: 1 for true condition, 0 for neutral, -1 for opposite
+        this.flags.zero = decimal === 0 ? 1 : 0;
+        this.flags.positive = decimal > 0 ? 1 : (decimal < 0 ? -1 : 0);
+        this.flags.negative = decimal < 0 ? 1 : (decimal > 0 ? -1 : 0);
         
-        // Check for overflow (result exceeds tryte range)
-        this.flags.overflow = decimal > Tryte.MAX_VALUE || decimal < Tryte.MIN_VALUE;
+        // Check for overflow/underflow (result exceeds tryte range)
+        if (decimal > Tryte.MAX_VALUE) {
+            this.flags.overflow = 1;  // Overflow
+        } else if (decimal < Tryte.MIN_VALUE) {
+            this.flags.overflow = -1; // Underflow
+        } else {
+            this.flags.overflow = 0;  // No overflow
+        }
     }
 
     // Arithmetic operations
@@ -132,13 +140,13 @@ class TernaryALU {
 
     // Get flags as a tryte
     getFlagsAsTrits() {
-        // Encode flags as ternary: [overflow, carry, negative, positive, zero]
+        // Encode flags as ternary trits: [zero, positive, negative, carry, overflow, reserved]
         const flags = [
-            this.flags.zero ? 1 : 0,
-            this.flags.positive ? 1 : 0,
-            this.flags.negative ? 1 : 0,
-            this.flags.carry ? 1 : 0,
-            this.flags.overflow ? 1 : 0,
+            this.flags.zero,
+            this.flags.positive,
+            this.flags.negative,
+            this.flags.carry,
+            this.flags.overflow,
             0 // Reserved
         ];
         return new Tryte(flags);
@@ -147,12 +155,21 @@ class TernaryALU {
     // Set flags from tryte
     setFlagsFromTrits(tryte) {
         const trits = tryte.trits;
-        this.flags.zero = trits[0] === 1;
-        this.flags.positive = trits[1] === 1;
-        this.flags.negative = trits[2] === 1;
-        this.flags.carry = trits[3] === 1;
-        this.flags.overflow = trits[4] === 1;
+        this.flags.zero = trits[0];
+        this.flags.positive = trits[1];
+        this.flags.negative = trits[2];
+        this.flags.carry = trits[3];
+        this.flags.overflow = trits[4];
     }
+
+    // Helper methods to check flags in trit format
+    isZero() { return this.flags.zero === 1; }
+    isPositive() { return this.flags.positive === 1; }
+    isNegative() { return this.flags.negative === 1; }
+    hasOverflow() { return this.flags.overflow === 1; }
+    hasUnderflow() { return this.flags.overflow === -1; }
+    hasCarry() { return this.flags.carry === 1; }
+    hasBorrow() { return this.flags.carry === -1; }
 }
 
 class TernaryRegisters {
@@ -163,10 +180,16 @@ class TernaryRegisters {
         this.sp = new TernaryAddress(0, 9);  // Stack Pointer
         this.flags = new Tryte(0);           // Flags Register
         
-        // Additional working registers
+        // Extended general purpose registers (9 total)
         this.r1 = new Tryte(0);              // General purpose register 1
         this.r2 = new Tryte(0);              // General purpose register 2
         this.r3 = new Tryte(0);              // General purpose register 3
+        this.r4 = new Tryte(0);              // General purpose register 4
+        this.r5 = new Tryte(0);              // General purpose register 5
+        this.r6 = new Tryte(0);              // General purpose register 6
+        this.r7 = new Tryte(0);              // General purpose register 7
+        this.r8 = new Tryte(0);              // General purpose register 8
+        this.r9 = new Tryte(0);              // General purpose register 9
     }
 
     // Get register by name
@@ -180,6 +203,12 @@ class TernaryRegisters {
             case 'r1': return this.r1;
             case 'r2': return this.r2;
             case 'r3': return this.r3;
+            case 'r4': return this.r4;
+            case 'r5': return this.r5;
+            case 'r6': return this.r6;
+            case 'r7': return this.r7;
+            case 'r8': return this.r8;
+            case 'r9': return this.r9;
             default: throw new Error(`Unknown register: ${name}`);
         }
     }
@@ -198,6 +227,12 @@ class TernaryRegisters {
             case 'r1': this.r1 = val; break;
             case 'r2': this.r2 = val; break;
             case 'r3': this.r3 = val; break;
+            case 'r4': this.r4 = val; break;
+            case 'r5': this.r5 = val; break;
+            case 'r6': this.r6 = val; break;
+            case 'r7': this.r7 = val; break;
+            case 'r8': this.r8 = val; break;
+            case 'r9': this.r9 = val; break;
             default: throw new Error(`Unknown register: ${name}`);
         }
     }
@@ -212,6 +247,12 @@ class TernaryRegisters {
         this.r1 = new Tryte(0);
         this.r2 = new Tryte(0);
         this.r3 = new Tryte(0);
+        this.r4 = new Tryte(0);
+        this.r5 = new Tryte(0);
+        this.r6 = new Tryte(0);
+        this.r7 = new Tryte(0);
+        this.r8 = new Tryte(0);
+        this.r9 = new Tryte(0);
     }
 
     // Get all registers as object
@@ -224,7 +265,13 @@ class TernaryRegisters {
             flags: this.flags.toString(),
             r1: this.r1.toString(),
             r2: this.r2.toString(),
-            r3: this.r3.toString()
+            r3: this.r3.toString(),
+            r4: this.r4.toString(),
+            r5: this.r5.toString(),
+            r6: this.r6.toString(),
+            r7: this.r7.toString(),
+            r8: this.r8.toString(),
+            r9: this.r9.toString()
         };
     }
 }
@@ -433,19 +480,19 @@ class TernaryCPU {
     }
 
     jumpIfZero(operand) {
-        if (this.alu.flags.zero) {
+        if (this.alu.isZero()) {
             this.registers.set('pc', operand);
         }
     }
 
     jumpIfPositive(operand) {
-        if (this.alu.flags.positive) {
+        if (this.alu.isPositive()) {
             this.registers.set('pc', operand);
         }
     }
 
     jumpIfNegative(operand) {
-        if (this.alu.flags.negative) {
+        if (this.alu.isNegative()) {
             this.registers.set('pc', operand);
         }
     }

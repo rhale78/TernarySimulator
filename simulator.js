@@ -8,11 +8,13 @@ class TernarySimulator {
         this.memory = new TernaryMemory(9); // 9-trit addressing
         this.cpu = new TernaryCPU(this.memory);
         this.assembler = new TernaryAssembler();
+        this.highlevelCompiler = null; // Initialize lazily
         this.io = new MemoryMappedIO(this.memory);
         
         this.isRunning = false;
         this.executionSpeed = 100; // Hz
         this.executionInterval = null;
+        this.currentLanguage = 'assembly';
         
         this.initializeUI();
         this.setupEventListeners();
@@ -43,14 +45,32 @@ class TernarySimulator {
         // Editor controls
         document.getElementById('assembleBtn')?.addEventListener('click', () => this.assemble());
         document.getElementById('loadExampleBtn')?.addEventListener('click', () => this.loadExample());
+        document.getElementById('loadHLExampleBtn')?.addEventListener('click', () => this.loadHighLevelExample());
+        
+        // Language selection
+        const languageSelect = document.getElementById('languageSelect');
+        if (languageSelect) {
+            languageSelect.addEventListener('change', () => this.onLanguageChange());
+        }
         
         // Memory controls
         document.getElementById('refreshMemoryBtn')?.addEventListener('click', () => this.updateMemoryDisplay());
+        document.getElementById('memoryPrevBtn')?.addEventListener('click', () => this.previousMemoryPage());
+        document.getElementById('memoryNextBtn')?.addEventListener('click', () => this.nextMemoryPage());
         
-        // Memory start address input
-        const memoryStartInput = document.getElementById('memoryStart');
-        if (memoryStartInput) {
-            memoryStartInput.addEventListener('change', () => this.updateMemoryDisplay());
+        // Memory page controls
+        const memoryPageInput = document.getElementById('memoryPage');
+        const memoryPageSizeSelect = document.getElementById('memoryPageSize');
+        
+        if (memoryPageInput) {
+            memoryPageInput.addEventListener('change', () => this.updateMemoryDisplay());
+        }
+        
+        if (memoryPageSizeSelect) {
+            memoryPageSizeSelect.addEventListener('change', () => {
+                this.memory.pageSize = parseInt(memoryPageSizeSelect.value);
+                this.updateMemoryDisplay();
+            });
         }
     }
 
@@ -72,21 +92,51 @@ class TernarySimulator {
     // Assembly and program loading
     assemble() {
         const sourceCode = document.getElementById('programEditor')?.value || '';
+        const languageSelect = document.getElementById('languageSelect');
+        const currentLanguage = languageSelect?.value || 'assembly';
         
         try {
-            const result = this.assembler.assemble(sourceCode, 0);
+            let result;
+            
+            if (currentLanguage === 'highlevel') {
+                // Initialize compiler if not already done
+                if (!this.highlevelCompiler) {
+                    if (typeof TernaryHighLevelCompiler === 'undefined') {
+                        this.showMessage('High-level compiler not available', 'error');
+                        return;
+                    }
+                    this.highlevelCompiler = new TernaryHighLevelCompiler();
+                }
+                
+                // Compile high-level language to assembly first
+                const compileResult = this.highlevelCompiler.compile(sourceCode);
+                
+                if (!compileResult.success) {
+                    this.showMessage(`Compilation error: ${compileResult.error}`, 'error');
+                    return;
+                }
+                
+                // Show generated assembly in console for debugging
+                console.log('Generated Assembly:', compileResult.assembly);
+                
+                // Now assemble the generated assembly code
+                result = this.assembler.assemble(compileResult.assembly, 0);
+            } else {
+                // Direct assembly
+                result = this.assembler.assemble(sourceCode, 0);
+            }
             
             if (result.success) {
                 // Load program into memory
                 this.loadProgramIntoMemory(result.machineCode);
-                this.showMessage('Assembly successful!', 'success');
+                this.showMessage(`${currentLanguage === 'highlevel' ? 'Compilation and assembly' : 'Assembly'} successful!`, 'success');
                 this.updateMemoryDisplay();
                 this.updateDisplay();
             } else {
                 this.showMessage(`Assembly error: ${result.error} (line ${result.line})`, 'error');
             }
         } catch (error) {
-            this.showMessage(`Assembly error: ${error.message}`, 'error');
+            this.showMessage(`Error: ${error.message}`, 'error');
         }
     }
 
@@ -116,6 +166,69 @@ class TernarySimulator {
 
         document.getElementById('programEditor').value = nextExample.code;
         this.showMessage(`Loaded: ${nextExample.name}`, 'info');
+    }
+
+    onLanguageChange() {
+        const languageSelect = document.getElementById('languageSelect');
+        const programEditor = document.getElementById('programEditor');
+        const loadExampleBtn = document.getElementById('loadExampleBtn');
+        const loadHLExampleBtn = document.getElementById('loadHLExampleBtn');
+        const assembleBtn = document.getElementById('assembleBtn');
+        
+        if (!languageSelect) return;
+        
+        this.currentLanguage = languageSelect.value;
+        
+        if (this.currentLanguage === 'highlevel') {
+            // Switch to high-level language mode
+            if (programEditor) programEditor.placeholder = 'Enter your C-like high-level code here...';
+            if (loadExampleBtn) loadExampleBtn.style.display = 'none';
+            if (loadHLExampleBtn) loadHLExampleBtn.style.display = 'inline-block';
+            if (assembleBtn) assembleBtn.textContent = 'Compile & Assemble';
+            
+            // Load default high-level example if available
+            if (programEditor && !programEditor.value.trim() && typeof TernaryHighLevelCompiler !== 'undefined') {
+                programEditor.value = TernaryHighLevelCompiler.getExampleProgram();
+            }
+        } else {
+            // Switch to assembly mode
+            if (programEditor) programEditor.placeholder = 'Enter your balanced ternary assembly code here...';
+            if (loadExampleBtn) loadExampleBtn.style.display = 'inline-block';
+            if (loadHLExampleBtn) loadHLExampleBtn.style.display = 'none';
+            if (assembleBtn) assembleBtn.textContent = 'Assemble';
+            
+            // Load default assembly example
+            if (programEditor && !programEditor.value.trim()) {
+                programEditor.value = TernaryAssembler.getExampleProgram();
+            }
+        }
+    }
+
+    loadHighLevelExample() {
+        if (typeof TernaryHighLevelCompiler === 'undefined') {
+            this.showMessage('High-level compiler not available', 'error');
+            return;
+        }
+        
+        const examples = [
+            { name: 'Basic Math', code: TernaryHighLevelCompiler.getExampleProgram() },
+            { name: 'Loop Example', code: TernaryHighLevelCompiler.getLoopExample() },
+            { name: 'Conditional', code: TernaryHighLevelCompiler.getConditionExample() }
+        ];
+
+        // Simple example rotation
+        const currentCode = document.getElementById('programEditor')?.value || '';
+        let nextExample = examples[0];
+
+        for (let i = 0; i < examples.length; i++) {
+            if (currentCode.includes(examples[i].name.split(' ')[0].toLowerCase())) {
+                nextExample = examples[(i + 1) % examples.length];
+                break;
+            }
+        }
+
+        document.getElementById('programEditor').value = nextExample.code;
+        this.showMessage(`Loaded HL: ${nextExample.name}`, 'info');
     }
 
     // Execution control
@@ -162,12 +275,30 @@ class TernarySimulator {
 
     reset() {
         this.pause();
+        
+        // Reset CPU registers but preserve memory program
+        this.cpu.reset();
+        
+        // Clear only graphics and I/O, not program memory
+        this.clearGraphics();
+        
+        // Clear change history for clean slate
+        this.memory.clearChangeHistory();
+        
+        this.updateDisplay();
+        this.updateMemoryDisplay();
+        this.showMessage('System reset (program memory preserved)', 'info');
+    }
+
+    // Full reset that clears everything including program memory
+    fullReset() {
+        this.pause();
         this.cpu.reset();
         this.memory.clear();
         this.clearGraphics();
         this.updateDisplay();
         this.updateMemoryDisplay();
-        this.showMessage('System reset', 'info');
+        this.showMessage('Full system reset', 'info');
     }
 
     // Display updates
@@ -186,7 +317,16 @@ class TernarySimulator {
             'regACC': state.registers.acc,
             'regIX': state.registers.ix,
             'regSP': state.registers.sp,
-            'regFLAGS': state.registers.flags
+            'regFLAGS': state.registers.flags,
+            'regR1': state.registers.r1,
+            'regR2': state.registers.r2,
+            'regR3': state.registers.r3,
+            'regR4': state.registers.r4,
+            'regR5': state.registers.r5,
+            'regR6': state.registers.r6,
+            'regR7': state.registers.r7,
+            'regR8': state.registers.r8,
+            'regR9': state.registers.r9
         };
 
         for (let [elementId, value] of Object.entries(regMap)) {
@@ -196,6 +336,30 @@ class TernarySimulator {
                 // Add visual highlighting for changed values
                 element.classList.add('highlight');
                 setTimeout(() => element.classList.remove('highlight'), 500);
+            }
+        }
+
+        // Update individual flag displays
+        const flags = this.cpu.alu.flags;
+        const flagMap = {
+            'flagZero': flags.zero,
+            'flagPositive': flags.positive,
+            'flagNegative': flags.negative,
+            'flagCarry': flags.carry,
+            'flagOverflow': flags.overflow
+        };
+
+        for (let [elementId, value] of Object.entries(flagMap)) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                // Display trit values with appropriate styling
+                element.textContent = value;
+                element.className = 'flag-value';
+                if (value === 1) {
+                    element.classList.add('flag-positive');
+                } else if (value === -1) {
+                    element.classList.add('flag-negative');
+                }
             }
         }
     }
@@ -219,33 +383,113 @@ class TernarySimulator {
 
     updateMemoryDisplay() {
         const memoryDisplay = document.getElementById('memoryDisplay');
-        const startAddrInput = document.getElementById('memoryStart');
+        const memoryChanges = document.getElementById('memoryChanges');
+        const pageInput = document.getElementById('memoryPage');
         
-        if (!memoryDisplay || !startAddrInput) return;
+        if (!memoryDisplay) return;
 
-        const startAddr = parseInt(startAddrInput.value) || 0;
-        const dump = this.memory.dump(startAddr, 16);
+        const page = parseInt(pageInput?.value) || 0;
+        const pagedDump = this.memory.getPagedDump(page);
         
+        // Create grid layout
         memoryDisplay.innerHTML = '';
+        const grid = document.createElement('div');
+        grid.className = 'memory-grid';
         
-        for (let entry of dump) {
-            const row = document.createElement('div');
-            row.className = 'memory-row';
+        for (let row of pagedDump.grid) {
+            for (let entry of row) {
+                const cell = document.createElement('div');
+                cell.className = 'memory-cell';
+                if (!entry.initialized) {
+                    cell.classList.add('uninitialized');
+                }
+                
+                // Address
+                const address = document.createElement('div');
+                address.className = 'memory-address';
+                address.textContent = entry.address;
+                
+                // Value in ternary
+                const value = document.createElement('div');
+                value.className = 'memory-value';
+                value.textContent = entry.value;
+                
+                // Decimal value
+                const decimal = document.createElement('div');
+                decimal.className = 'memory-decimal';
+                decimal.textContent = `(${entry.decimal})`;
+                
+                // Add hover tooltip for ternary representation
+                cell.title = `Address: ${entry.address}\nTernary: ${entry.value}\nDecimal: ${entry.decimal}`;
+                
+                cell.appendChild(address);
+                cell.appendChild(value);
+                cell.appendChild(decimal);
+                grid.appendChild(cell);
+            }
+        }
+        
+        memoryDisplay.appendChild(grid);
+        
+        // Update memory changes display
+        if (memoryChanges) {
+            this.updateMemoryChanges();
+        }
+    }
+
+    updateMemoryChanges() {
+        const memoryChanges = document.getElementById('memoryChanges');
+        if (!memoryChanges) return;
+        
+        const changes = this.memory.getChangeHistory(10);
+        memoryChanges.innerHTML = '';
+        
+        if (changes.length === 0) {
+            memoryChanges.innerHTML = '<div style="color: #888; text-align: center;">No recent changes</div>';
+            return;
+        }
+        
+        for (let change of changes.reverse()) {
+            const changeDiv = document.createElement('div');
+            changeDiv.className = 'memory-change';
             
             const address = document.createElement('span');
-            address.className = 'memory-address';
-            address.textContent = entry.address;
+            address.className = 'change-address';
+            address.textContent = change.address;
             
-            const value = document.createElement('span');
-            value.className = 'memory-value';
-            if (!entry.initialized) {
-                value.classList.add('uninitialized');
+            const values = document.createElement('span');
+            values.className = 'change-values';
+            values.innerHTML = `<span class="change-old">${change.oldValue}</span> → <span class="change-new">${change.newValue}</span>`;
+            
+            const time = document.createElement('span');
+            time.className = 'change-time';
+            const timeAgo = Date.now() - change.timestamp;
+            time.textContent = timeAgo < 1000 ? 'now' : `${Math.floor(timeAgo/1000)}s`;
+            
+            changeDiv.appendChild(address);
+            changeDiv.appendChild(values);
+            changeDiv.appendChild(time);
+            memoryChanges.appendChild(changeDiv);
+        }
+    }
+
+    previousMemoryPage() {
+        const pageInput = document.getElementById('memoryPage');
+        if (pageInput) {
+            const currentPage = parseInt(pageInput.value) || 0;
+            if (currentPage > 0) {
+                pageInput.value = currentPage - 1;
+                this.updateMemoryDisplay();
             }
-            value.textContent = `${entry.value} (${entry.decimal})`;
-            
-            row.appendChild(address);
-            row.appendChild(value);
-            memoryDisplay.appendChild(row);
+        }
+    }
+
+    nextMemoryPage() {
+        const pageInput = document.getElementById('memoryPage');
+        if (pageInput) {
+            const currentPage = parseInt(pageInput.value) || 0;
+            pageInput.value = currentPage + 1;
+            this.updateMemoryDisplay();
         }
     }
 

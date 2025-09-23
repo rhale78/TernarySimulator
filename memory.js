@@ -20,6 +20,8 @@ class TernaryMemory {
         this.memory = new Map(); // Sparse memory implementation
         this.watchpoints = new Set(); // For debugging
         this.accessHistory = []; // Track memory accesses
+        this.changeHistory = []; // Track memory changes for display
+        this.pageSize = 16; // Default page size for memory display
     }
 
     calculateMaxAddress() {
@@ -71,6 +73,27 @@ class TernaryMemory {
         const addr = this.validateAddress(address);
         const key = addr.toString();
         const tryte = value instanceof Tryte ? new Tryte(value.trits) : new Tryte(value);
+        
+        // Get old value for change tracking
+        const oldValue = this.memory.get(key);
+        const oldTryte = oldValue ? new Tryte(oldValue.trits) : new Tryte(0);
+        
+        // Track change history if value is different
+        if (!oldValue || !oldTryte.equals(tryte)) {
+            this.changeHistory.push({
+                address: key,
+                oldValue: oldTryte.toString(),
+                oldDecimal: oldTryte.toDecimal(),
+                newValue: tryte.toString(),
+                newDecimal: tryte.toDecimal(),
+                timestamp: Date.now()
+            });
+            
+            // Keep only last 100 changes
+            if (this.changeHistory.length > 100) {
+                this.changeHistory = this.changeHistory.slice(-100);
+            }
+        }
         
         // Track access for debugging
         this.accessHistory.push({
@@ -147,6 +170,38 @@ class TernaryMemory {
         }
         
         return dump;
+    }
+
+    // Get paged memory dump with grid layout
+    getPagedDump(page = 0, pageSize = null) {
+        const size = pageSize || this.pageSize;
+        const startAddress = page * size;
+        const dump = this.dump(startAddress, size);
+        
+        // Organize into grid format (4 columns for better layout)
+        const grid = [];
+        const cols = 4;
+        for (let i = 0; i < dump.length; i += cols) {
+            grid.push(dump.slice(i, i + cols));
+        }
+        
+        return {
+            page: page,
+            pageSize: size,
+            startAddress: startAddress,
+            grid: grid,
+            totalPages: Math.ceil(this.maxAddress * 2 / size) // Approximate total pages
+        };
+    }
+
+    // Get recent memory changes
+    getChangeHistory(maxEntries = 10) {
+        return this.changeHistory.slice(-maxEntries);
+    }
+
+    // Clear change history
+    clearChangeHistory() {
+        this.changeHistory = [];
     }
 
     // Set/clear watchpoints for debugging

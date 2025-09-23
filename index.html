@@ -22,20 +22,43 @@
             <div class="left-panel">
                 <div class="editor-section">
                     <h3>Program Editor</h3>
+                    <div class="language-controls">
+                        <label>Language: 
+                            <select id="languageSelect">
+                                <option value="assembly">Ternary Assembly</option>
+                                <option value="highlevel">C-like High Level</option>
+                            </select>
+                        </label>
+                    </div>
                     <textarea id="programEditor" placeholder="Enter your balanced ternary assembly code here..."></textarea>
                     <div class="editor-controls">
                         <button id="assembleBtn">Assemble</button>
                         <button id="loadExampleBtn">Load Example</button>
+                        <button id="loadHLExampleBtn" style="display: none;">Load HL Example</button>
                     </div>
                 </div>
                 
                 <div class="memory-section">
                     <h3>Memory View</h3>
                     <div class="memory-controls">
-                        <label>Start Address: <input type="text" id="memoryStart" value="000000000" maxlength="9"></label>
+                        <label>Page: <input type="number" id="memoryPage" value="0" min="0" style="width: 60px;"></label>
+                        <label>Page Size: 
+                            <select id="memoryPageSize">
+                                <option value="16" selected>16</option>
+                                <option value="32">32</option>
+                                <option value="64">64</option>
+                            </select>
+                        </label>
+                        <button id="memoryPrevBtn">◀ Prev</button>
+                        <button id="memoryNextBtn">Next ▶</button>
                         <button id="refreshMemoryBtn">Refresh</button>
                     </div>
                     <div id="memoryDisplay" class="memory-display"></div>
+                    
+                    <div class="memory-changes">
+                        <h4>Recent Memory Changes</h4>
+                        <div id="memoryChanges" class="memory-changes-display"></div>
+                    </div>
                 </div>
             </div>
             
@@ -62,8 +85,70 @@
                                 <span id="regSP" class="reg-value">000000000</span>
                             </div>
                             <div class="register">
-                                <label>FLAGS:</label>
-                                <span id="regFLAGS" class="reg-value">000</span>
+                                <label>R1:</label>
+                                <span id="regR1" class="reg-value">000000</span>
+                            </div>
+                            <div class="register">
+                                <label>R2:</label>
+                                <span id="regR2" class="reg-value">000000</span>
+                            </div>
+                            <div class="register">
+                                <label>R3:</label>
+                                <span id="regR3" class="reg-value">000000</span>
+                            </div>
+                            <div class="register">
+                                <label>R4:</label>
+                                <span id="regR4" class="reg-value">000000</span>
+                            </div>
+                            <div class="register">
+                                <label>R5:</label>
+                                <span id="regR5" class="reg-value">000000</span>
+                            </div>
+                            <div class="register">
+                                <label>R6:</label>
+                                <span id="regR6" class="reg-value">000000</span>
+                            </div>
+                            <div class="register">
+                                <label>R7:</label>
+                                <span id="regR7" class="reg-value">000000</span>
+                            </div>
+                            <div class="register">
+                                <label>R8:</label>
+                                <span id="regR8" class="reg-value">000000</span>
+                            </div>
+                            <div class="register">
+                                <label>R9:</label>
+                                <span id="regR9" class="reg-value">000000</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flags-section">
+                        <h4>Flag Register Details</h4>
+                        <div class="flag-grid">
+                            <div class="flag">
+                                <label>Zero:</label>
+                                <span id="flagZero" class="flag-value">0</span>
+                            </div>
+                            <div class="flag">
+                                <label>Positive:</label>
+                                <span id="flagPositive" class="flag-value">0</span>
+                            </div>
+                            <div class="flag">
+                                <label>Negative:</label>
+                                <span id="flagNegative" class="flag-value">0</span>
+                            </div>
+                            <div class="flag">
+                                <label>Carry:</label>
+                                <span id="flagCarry" class="flag-value">0</span>
+                            </div>
+                            <div class="flag">
+                                <label>Overflow:</label>
+                                <span id="flagOverflow" class="flag-value">0</span>
+                            </div>
+                            <div class="flag">
+                                <label>FLAGS (Raw):</label>
+                                <span id="regFLAGS" class="reg-value">000000</span>
                             </div>
                         </div>
                     </div>
@@ -105,6 +190,7 @@
     <script src="cpu.js"></script>
     <script src="memory.js"></script>
     <script src="assembler.js"></script>
+    <script src="highlevel.js"></script>
     <script src="simulator.js"></script>
 </body>
 </html>
