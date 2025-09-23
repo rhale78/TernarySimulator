@@ -328,7 +328,7 @@ class TwoLevelCacheSystem {
         
         // L2 miss, read from memory
         this.memoryHit++;
-        const data = this.memory.read(address);
+        const data = this.memory.directRead(address);
         
         // Load into L2 cache
         const l2WriteResult = this.l2Cache.write(address, data, true);
@@ -354,7 +354,7 @@ class TwoLevelCacheSystem {
     
     writeThrough(address, data) {
         // Write to all levels and memory
-        this.memory.write(address, data);
+        this.memory.directWrite(address, data);
         
         // Update L1 if present
         const l1Result = this.l1Cache.write(address, data, true);
@@ -387,7 +387,7 @@ class TwoLevelCacheSystem {
             const l2ReadResult = this.l2Cache.read(address);
             if (!l2ReadResult.hit) {
                 // Not in L2, read from memory first
-                dataToWrite = this.memory.read(address);
+                dataToWrite = this.memory.directRead(address);
                 this.memoryHit++;
                 
                 // Allocate in L2
@@ -402,7 +402,7 @@ class TwoLevelCacheSystem {
             this.handleL1Eviction(l1WriteResult.evicted);
         } else {
             // No allocation - write directly to memory
-            this.memory.write(address, data);
+            this.memory.directWrite(address, data);
             this.memoryHit++;
         }
     }
@@ -419,7 +419,7 @@ class TwoLevelCacheSystem {
         if (!evicted) return;
         
         // Write evicted line to memory
-        this.memory.write(evicted.address, evicted.data);
+        this.memory.directWrite(evicted.address, evicted.data);
     }
     
     // Invalidate address in all cache levels
@@ -435,10 +435,10 @@ class TwoLevelCacheSystem {
         
         // Write back all dirty data
         for (let evicted of l1Evicted) {
-            this.memory.write(evicted.address, evicted.data);
+            this.memory.directWrite(evicted.address, evicted.data);
         }
         for (let evicted of l2Evicted) {
-            this.memory.write(evicted.address, evicted.data);
+            this.memory.directWrite(evicted.address, evicted.data);
         }
     }
     

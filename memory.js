@@ -56,7 +56,19 @@ class TernaryMemory {
             timestamp: Date.now()
         });
 
-        // Return stored value or zero if not initialized
+        // Use cache system if available (set by simulator)
+        if (this.cacheSystem) {
+            const value = this.cacheSystem.read(address);
+            
+            // Check watchpoints
+            if (this.watchpoints.has(key)) {
+                console.log(`Memory watchpoint hit: READ from ${key} = ${value.toString()} (via cache)`);
+            }
+            
+            return value;
+        }
+
+        // Direct memory access (fallback)
         const stored = this.memory.get(key);
         const value = stored ? new Tryte(stored.trits) : new Tryte(0);
         
@@ -103,13 +115,39 @@ class TernaryMemory {
             timestamp: Date.now()
         });
 
-        // Store the value
+        // Use cache system if available (set by simulator)
+        if (this.cacheSystem) {
+            this.cacheSystem.write(address, tryte);
+            
+            // Check watchpoints
+            if (this.watchpoints.has(key)) {
+                console.log(`Memory watchpoint hit: WRITE to ${key} = ${tryte.toString()} (via cache)`);
+            }
+            return;
+        }
+
+        // Direct memory access (fallback)
         this.memory.set(key, tryte);
         
         // Check watchpoints
         if (this.watchpoints.has(key)) {
             console.log(`Memory watchpoint hit: WRITE to ${key} = ${tryte.toString()}`);
         }
+    }
+
+    // Direct memory access methods (for cache system use)
+    directRead(address) {
+        const addr = this.validateAddress(address);
+        const key = addr.toString();
+        const stored = this.memory.get(key);
+        return stored ? new Tryte(stored.trits) : new Tryte(0);
+    }
+
+    directWrite(address, value) {
+        const addr = this.validateAddress(address);
+        const key = addr.toString();
+        const tryte = value instanceof Tryte ? new Tryte(value.trits) : new Tryte(value);
+        this.memory.set(key, tryte);
     }
 
     // Read multiple trytes starting from address

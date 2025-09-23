@@ -560,6 +560,51 @@ header h1 {
     color: #ccc;
 }
 
+.cache-system h4 {
+    color: #4CAF50;
+    margin-bottom: 10px;
+}
+
+.cache-status {
+    font-size: 12px;
+    color: #ccc;
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cache-controls {
+    margin-bottom: 10px;
+}
+
+.cache-controls button {
+    background-color: #3a3a3a;
+    border: 1px solid #555;
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    margin-right: 5px;
+    font-size: 11px;
+}
+
+.cache-controls button:hover {
+    background-color: #4a4a4a;
+}
+
+.cache-output {
+    background-color: #1a1a1a;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 8px;
+    height: 120px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: #ccc;
+}
+
 /* Debug Section */
 .debug-section {
     background-color: #2d2d2d;

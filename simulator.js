@@ -84,6 +84,11 @@ class TernarySimulator {
         document.getElementById('dmaShowChannelsBtn')?.addEventListener('click', () => this.showDMAChannels());
         document.getElementById('dmaStatsBtn')?.addEventListener('click', () => this.showDMAStats());
         document.getElementById('dmaTestBtn')?.addEventListener('click', () => this.testDMATransfer());
+        
+        // Cache system controls
+        document.getElementById('cacheStatsBtn')?.addEventListener('click', () => this.showCacheStats());
+        document.getElementById('cacheBenchmarkBtn')?.addEventListener('click', () => this.benchmarkCache());
+        document.getElementById('cacheFlushBtn')?.addEventListener('click', () => this.flushCache());
     }
 
     initializeGraphics() {
@@ -101,6 +106,12 @@ class TernarySimulator {
         
         // Initialize DMA controller
         this.dmaController = new DMAController(this.memory);
+        
+        // Initialize 2-layer cache system
+        this.cacheSystem = new TwoLevelCacheSystem(this.memory);
+        
+        // Connect cache system to memory for direct access
+        this.memory.cacheSystem = this.cacheSystem;
     }
 
     clearGraphics() {
@@ -335,6 +346,7 @@ class TernarySimulator {
         this.updateSystemStatus();
         this.updateDiskStatus();
         this.updateDMAStatus();
+        this.updateCacheStatus();
         
         // Process DMA transfers
         if (this.dmaController) {
@@ -783,6 +795,112 @@ Arbitration: ${stats.arbitrationMode}`;
             document.getElementById('dmaActiveChannels').textContent = stats.activeChannels;
             document.getElementById('dmaTotalTransfers').textContent = stats.totalTransfers;
             document.getElementById('dmaEfficiency').textContent = stats.efficiency;
+        }
+    }
+
+    // Cache system interface
+    showCacheStats() {
+        if (this.cacheSystem) {
+            const stats = this.cacheSystem.getStats();
+            const output = document.getElementById('cacheOutput');
+            if (output) {
+                const statsText = `Cache System Statistics:
+
+L1 Cache:
+- Size: ${stats.l1.size} lines (${stats.l1.associativity}-way associative)
+- Policy: ${stats.l1.policy}
+- Hits: ${stats.l1.hits}, Misses: ${stats.l1.misses}
+- Hit Rate: ${stats.l1.hitRate}
+- Evictions: ${stats.l1.evictions}, Writebacks: ${stats.l1.writebacks}
+
+L2 Cache:
+- Size: ${stats.l2.size} lines (${stats.l2.associativity}-way associative)
+- Policy: ${stats.l2.policy}
+- Hits: ${stats.l2.hits}, Misses: ${stats.l2.misses}
+- Hit Rate: ${stats.l2.hitRate}
+- Evictions: ${stats.l2.evictions}, Writebacks: ${stats.l2.writebacks}
+
+System:
+- Total Accesses: ${stats.system.totalAccesses}
+- L1 Only Rate: ${stats.system.l1OnlyRate}
+- L2 Hit Rate: ${stats.system.l2HitRate}
+- Memory Access Rate: ${stats.system.memoryAccessRate}
+- Write Policy: ${stats.system.writePolicy}
+- Allocation Policy: ${stats.system.allocationPolicy}`;
+                output.textContent = statsText;
+            }
+            this.updateCacheStatus();
+        }
+    }
+
+    benchmarkCache() {
+        if (this.cacheSystem) {
+            try {
+                const output = document.getElementById('cacheOutput');
+                if (output) {
+                    output.textContent = 'Running cache benchmark...';
+                }
+                
+                // Run benchmark with different access patterns
+                const sequential = this.cacheSystem.benchmarkAccess('sequential', 100);
+                const random = this.cacheSystem.benchmarkAccess('random', 100);
+                const stride = this.cacheSystem.benchmarkAccess('stride', 100);
+                
+                if (output) {
+                    const benchmarkText = `Cache Benchmark Results:
+
+Sequential Access (100 ops):
+- L1 Hit Rate: ${sequential.l1.hitRate}
+- L2 Hit Rate: ${sequential.l2.hitRate}
+- Time: ${sequential.benchmark.timeMs}ms
+- Ops/ms: ${sequential.benchmark.opsPerMs}
+
+Random Access (100 ops):
+- L1 Hit Rate: ${random.l1.hitRate}
+- L2 Hit Rate: ${random.l2.hitRate}
+- Time: ${random.benchmark.timeMs}ms
+- Ops/ms: ${random.benchmark.opsPerMs}
+
+Stride Access (100 ops):
+- L1 Hit Rate: ${stride.l1.hitRate}
+- L2 Hit Rate: ${stride.l2.hitRate}
+- Time: ${stride.benchmark.timeMs}ms
+- Ops/ms: ${stride.benchmark.opsPerMs}`;
+                    output.textContent = benchmarkText;
+                }
+                
+                this.updateCacheStatus();
+                this.showMessage('Cache benchmark completed', 'success');
+            } catch (error) {
+                this.showMessage(`Cache benchmark error: ${error.message}`, 'error');
+            }
+        }
+    }
+
+    flushCache() {
+        if (this.cacheSystem) {
+            try {
+                this.cacheSystem.flush();
+                const output = document.getElementById('cacheOutput');
+                if (output) {
+                    output.textContent = 'All caches flushed. Dirty data written back to memory.';
+                }
+                this.updateCacheStatus();
+                this.showMessage('Cache flushed successfully', 'success');
+            } catch (error) {
+                this.showMessage(`Cache flush error: ${error.message}`, 'error');
+            }
+        }
+    }
+
+    updateCacheStatus() {
+        if (this.cacheSystem) {
+            const stats = this.cacheSystem.getStats();
+            
+            document.getElementById('l1HitRate').textContent = stats.l1.hitRate;
+            document.getElementById('l2HitRate').textContent = stats.l2.hitRate;
+            document.getElementById('cacheAccesses').textContent = stats.system.totalAccesses;
+            document.getElementById('memoryHitRate').textContent = stats.system.memoryAccessRate;
         }
     }
 
