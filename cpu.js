@@ -1454,7 +1454,7 @@ class TernaryCPU {
                 return;
             }
             const result = current.divide(operand);
-            this.registers.set('accw', new Word(result.toDecimal()));
+            this.registers.set('accw', new DoubleWord(result.toDecimal()));
         } else {
             // Read word from memory
             const addr = new TernaryAddress(operand, 9);
@@ -1469,7 +1469,7 @@ class TernaryCPU {
             }
             
             const result = current.divide(memValue);
-            this.registers.set('accw', new Word(result.toDecimal()));
+            this.registers.set('accw', new DoubleWord(result.toDecimal()));
         }
         this.alu.updateFlags(this.registers.get('accw'));
     }
@@ -1478,7 +1478,7 @@ class TernaryCPU {
         const current = this.registers.get('accw');
         if (typeof operand === 'number') {
             const result = current.xor(operand);
-            this.registers.set('accw', new Word(result.toDecimal()));
+            this.registers.set('accw', new DoubleWord(result.toDecimal()));
         } else {
             // Read word from memory
             const addr = new TernaryAddress(operand, 9);
@@ -1488,7 +1488,7 @@ class TernaryCPU {
             let memValue = low.toDecimal() + (high.toDecimal() * 729);
             
             const result = current.xor(memValue);
-            this.registers.set('accw', new Word(result.toDecimal()));
+            this.registers.set('accw', new DoubleWord(result.toDecimal()));
         }
         this.alu.updateFlags(this.registers.get('accw'));
     }
