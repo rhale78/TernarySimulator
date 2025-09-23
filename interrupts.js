@@ -44,18 +44,33 @@ class InterruptVectorTable {
 
     // Set interrupt vector
     setVector(interruptNumber, handlerAddress) {
+        // For simplicity, just store the address directly in the vector map
+        // and use a simple tryte storage for compatibility
+        this.vectors.set(interruptNumber, handlerAddress);
+        
+        // Also store in memory for completeness (use simple storage for now)
         const vectorAddr = new TernaryAddress(
             this.baseAddress.toDecimal() + interruptNumber, 
             9
         );
-        const handler = new TernaryAddress(handlerAddress, 9);
         
-        this.memory.write(vectorAddr, new Tryte(handler.toDecimal()));
-        this.vectors.set(interruptNumber, handlerAddress);
+        // If address fits in tryte range, store directly, otherwise store a reference
+        if (handlerAddress >= -364 && handlerAddress <= 364) {
+            this.memory.write(vectorAddr, new Tryte(handlerAddress));
+        } else {
+            // Store a marker and use the internal map
+            this.memory.write(vectorAddr, new Tryte(-1)); // Special marker for large addresses
+        }
     }
 
     // Get interrupt vector
     getVector(interruptNumber) {
+        // First check internal map
+        if (this.vectors.has(interruptNumber)) {
+            return new TernaryAddress(this.vectors.get(interruptNumber), 9);
+        }
+        
+        // Fall back to memory storage
         const vectorAddr = new TernaryAddress(
             this.baseAddress.toDecimal() + interruptNumber, 
             9
@@ -127,7 +142,7 @@ class InterruptController {
         this.nestedHandlers = [];
         
         // Interrupt masking by priority level
-        this.maskLevel = 0; // Interrupts with priority >= maskLevel are masked
+        this.maskLevel = 1000; // By default, don't mask any interrupts (use high value)
         this.globalMask = new Set(); // Specific interrupts that are globally masked
     }
 
@@ -368,7 +383,7 @@ class InterruptController {
         this.interruptEnabled = true;
         this.inInterruptHandler = false;
         this.currentNestingLevel = 0;
-        this.maskLevel = 0;
+        this.maskLevel = 1000; // Don't mask any interrupts by default
         this.interruptStack = [];
         this.nestedHandlers = [];
     }
